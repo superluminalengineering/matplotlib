@@ -14,6 +14,7 @@ dependencies:
   - kiwisolver>=1.0.1
   - numpy>=1.19
   - pillow>=6.2
+  - plotly>=5.7.0
   - pygobject
   - pyparsing
   - pyqt

@@ -23,7 +23,7 @@ from numbers import Integral
 import numpy as np
 
 import matplotlib as mpl
-from matplotlib import _blocking_input, _docstring, projections
+from matplotlib import _blocking_input, _docstring, projections, _plotly_helpers
 from matplotlib.artist import (
     Artist, allow_rasterization, _finalize_rasterization)
 from matplotlib.backend_bases import (
@@ -2462,15 +2462,7 @@ class Figure(FigureBase):
             If ``True`` and we are not running headless (i.e. on Linux with an
             unset DISPLAY), issue warning when called on a non-GUI backend.
         """
-        if self.canvas.manager is None:
-            raise AttributeError(
-                "Figure.show works only for figures managed by pyplot, "
-                "normally created by pyplot.figure()")
-        try:
-            self.canvas.manager.show()
-        except NonGuiException as exc:
-            if warn:
-                _api.warn_external(str(exc))
+        _plotly_helpers.Plotly.save(self)
 
     @property
     def axes(self):

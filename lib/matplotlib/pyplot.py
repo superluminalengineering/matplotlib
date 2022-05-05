@@ -44,6 +44,7 @@ from numbers import Number
 import re
 import sys
 import time
+
 try:
     import threading
 except ImportError:
@@ -53,7 +54,7 @@ from cycler import cycler
 import matplotlib
 import matplotlib.colorbar
 import matplotlib.image
-from matplotlib import _api
+from matplotlib import _api, _plotly_helpers
 from matplotlib import rcsetup, style
 from matplotlib import _pylab_helpers, interactive
 from matplotlib import cbook
@@ -375,8 +376,13 @@ def show(*args, **kwargs):
     the end of every cell by default. Thus, you usually don't have to call it
     explicitly there.
     """
-    _warn_if_gui_out_of_main_thread()
-    return _get_backend_mod().show(*args, **kwargs)
+
+    managers = _pylab_helpers.Gcf.get_all_fig_managers()
+    if not managers:
+        return
+    for manager in managers:
+        figure = manager.canvas.figure
+        _plotly_helpers.Plotly.save(figure)
 
 
 def isinteractive():
