@@ -10,8 +10,8 @@ class Plotly:
         try:
             plot = tools.mpl_to_plotly(fig)
             json = plot.to_json()
-            timestamp = datetime.utcnow()
-            file = open("plots/{}.html".format(timestamp), "w")
+            timestamp = datetime.utcnow().timestamp()
+            file = open("plots/{}.json".format(timestamp), "w")
             file.write(json)
             file.close()
         except:
