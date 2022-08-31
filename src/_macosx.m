@@ -3,6 +3,7 @@
 #include <ApplicationServices/ApplicationServices.h>
 #include <sys/socket.h>
 #include <Python.h>
+#include "mplutils.h"
 
 #ifndef PYPY
 /* Remove this once Python is fixed: https://bugs.python.org/issue23237 */
@@ -249,6 +250,21 @@ static void gil_call_method(PyObject* obj, const char* name)
     PyGILState_Release(gstate);
 }
 
+#define PROCESS_EVENT(cls_name, fmt, ...) \
+{ \
+    PyGILState_STATE gstate = PyGILState_Ensure(); \
+    PyObject* module = NULL, * event = NULL, * result = NULL; \
+    if (!(module = PyImport_ImportModule("matplotlib.backend_bases")) \
+        || !(event = PyObject_CallMethod(module, cls_name, fmt, __VA_ARGS__)) \
+        || !(result = PyObject_CallMethod(event, "_process", ""))) { \
+        PyErr_Print(); \
+    } \
+    Py_XDECREF(module); \
+    Py_XDECREF(event); \
+    Py_XDECREF(result); \
+    PyGILState_Release(gstate); \
+}
+
 static bool backend_inited = false;
 
 static void lazy_init(void) {
@@ -294,6 +310,8 @@ typedef struct {
     View* view;
 } FigureCanvas;
 
+static PyTypeObject FigureCanvasType;
+
 static PyObject*
 FigureCanvas_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
@@ -307,14 +325,27 @@ FigureCanvas_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static int
 FigureCanvas_init(FigureCanvas *self, PyObject *args, PyObject *kwds)
 {
-    int width;
-    int height;
     if (!self->view) {
         PyErr_SetString(PyExc_RuntimeError, "NSView* is NULL");
         return -1;
     }
-    if (!PyArg_ParseTuple(args, "ii", &width, &height)) { return -1; }
-
+    PyObject *builtins = NULL,
+             *super_obj = NULL,
+             *super_init = NULL,
+             *init_res = NULL,
+             *wh = NULL;
+    // super(FigureCanvasMac, self).__init__(*args, **kwargs)
+    if (!(builtins = PyImport_AddModule("builtins"))  // borrowed.
+            || !(super_obj = PyObject_CallMethod(builtins, "super", "OO", &FigureCanvasType, self))
+            || !(super_init = PyObject_GetAttrString(super_obj, "__init__"))
+            || !(init_res = PyObject_Call(super_init, args, kwds))) {
+        goto exit;
+    }
+    int width, height;
+    if (!(wh = PyObject_CallMethod((PyObject*)self, "get_width_height", ""))
+            || !PyArg_ParseTuple(wh, "ii", &width, &height)) {
+        goto exit;
+    }
     NSRect rect = NSMakeRect(0.0, 0.0, width, height);
     self->view = [self->view initWithFrame: rect];
     self->view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
@@ -326,7 +357,13 @@ FigureCanvas_init(FigureCanvas *self, PyObject *args, PyObject *kwds)
                                       owner: self->view
                                    userInfo: nil]];
     [self->view setCanvas: (PyObject*)self];
-    return 0;
+
+exit:
+    Py_XDECREF(super_obj);
+    Py_XDECREF(super_init);
+    Py_XDECREF(init_res);
+    Py_XDECREF(wh);
+    return PyErr_Occurred() ? -1 : 0;
 }
 
 static void
@@ -354,9 +391,20 @@ FigureCanvas_update(FigureCanvas* self)
 static PyObject*
 FigureCanvas_flush_events(FigureCanvas* self)
 {
-    // We need to allow the runloop to run very briefly
-    // to allow the view to be displayed when used in a fast updating animation
-    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.0]];
+    // We run the app, matching any events that are waiting in the queue
+    // to process, breaking out of the loop when no events remain and
+    // displaying the canvas if needed.
+    NSEvent *event;
+    while (true) {
+        event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                                   untilDate: [NSDate distantPast]
+                                      inMode: NSDefaultRunLoopMode
+                                     dequeue: YES];
+        if (!event) {
+            break;
+        }
+        [NSApp sendEvent:event];
+    }
     [self->view displayIfNeeded];
     Py_RETURN_NONE;
 }
@@ -677,10 +725,7 @@ FigureManager_set_window_title(FigureManager* self,
     if (!PyArg_ParseTuple(args, "s", &title)) {
         return NULL;
     }
-    NSString* ns_title = [[[NSString alloc]
-                           initWithCString: title
-                           encoding: NSUTF8StringEncoding] autorelease];
-    [self->window setTitle: ns_title];
+    [self->window setTitle: [NSString stringWithUTF8String: title]];
     Py_RETURN_NONE;
 }
 
@@ -908,10 +953,8 @@ NavigationToolbar2_init(NavigationToolbar2 *self, PyObject *args, PyObject *kwds
     rect.origin.y = 0.5*(height - rect.size.height);
 
     for (int i = 0; i < 7; i++) {
-        NSString* filename = [NSString stringWithCString: images[i]
-                                                encoding: NSUTF8StringEncoding];
-        NSString* tooltip = [NSString stringWithCString: tooltips[i]
-                                               encoding: NSUTF8StringEncoding];
+        NSString* filename = [NSString stringWithUTF8String: images[i]];
+        NSString* tooltip = [NSString stringWithUTF8String: tooltips[i]];
         NSImage* image = [[NSImage alloc] initWithContentsOfFile: filename];
         buttons[i] = [[NSButton alloc] initWithFrame: rect];
         [image setSize: size];
@@ -934,20 +977,20 @@ NavigationToolbar2_init(NavigationToolbar2 *self, PyObject *args, PyObject *kwds
     [self->handler installCallbacks: actions forButtons: buttons];
 
     NSFont* font = [NSFont systemFontOfSize: 0.0];
-    rect.size.width = 300;
-    rect.size.height = 0;
-    rect.origin.x += height;
-    NSTextView* messagebox = [[NSTextView alloc] initWithFrame: rect];
+    // rect.origin.x is now at the far right edge of the buttons
+    // we want the messagebox to take up the rest of the toolbar area
+    // Make it a zero-width box if we don't have enough room
+    rect.size.width = fmax(bounds.size.width - rect.origin.x, 0);
+    rect.origin.x = bounds.size.width - rect.size.width;
+    NSTextView* messagebox = [[[NSTextView alloc] initWithFrame: rect] autorelease];
     messagebox.textContainer.maximumNumberOfLines = 2;
     messagebox.textContainer.lineBreakMode = NSLineBreakByTruncatingTail;
+    messagebox.alignment = NSTextAlignmentRight;
     [messagebox setFont: font];
     [messagebox setDrawsBackground: NO];
     [messagebox setSelectable: NO];
     /* if selectable, the messagebox can become first responder,
      * which is not supposed to happen */
-    rect = [messagebox frame];
-    rect.origin.y = 0.5 * (height - rect.size.height);
-    [messagebox setFrameOrigin: rect.origin];
     [[window contentView] addSubview: messagebox];
     [messagebox release];
     [[window contentView] display];
@@ -974,7 +1017,7 @@ NavigationToolbar2_set_message(NavigationToolbar2 *self, PyObject* args)
 {
     const char* message;
 
-    if (!PyArg_ParseTuple(args, "y", &message)) { return NULL; }
+    if (!PyArg_ParseTuple(args, "s", &message)) { return NULL; }
 
     NSTextView* messagebox = self->messagebox;
 
@@ -982,18 +1025,23 @@ NavigationToolbar2_set_message(NavigationToolbar2 *self, PyObject* args)
         NSString* text = [NSString stringWithUTF8String: message];
         [messagebox setString: text];
 
-        // Adjust width with the window size
+        // Adjust width and height with the window size and content
         NSRect rectWindow = [messagebox.superview frame];
         NSRect rect = [messagebox frame];
+        // Entire region to the right of the buttons
         rect.size.width = rectWindow.size.width - rect.origin.x;
         [messagebox setFrame: rect];
-
-        // Adjust height with the content size
+        // We want to control the vertical position of
+        // the rect by the content size to center it vertically
         [messagebox.layoutManager ensureLayoutForTextContainer: messagebox.textContainer];
-        NSRect contentSize = [messagebox.layoutManager usedRectForTextContainer: messagebox.textContainer];
-        rect = [messagebox frame];
-        rect.origin.y = 0.5 * (self->height - contentSize.size.height);
+        NSRect contentRect = [messagebox.layoutManager usedRectForTextContainer: messagebox.textContainer];
+        rect.origin.y = 0.5 * (self->height - contentRect.size.height);
+        rect.size.height = contentRect.size.height;
         [messagebox setFrame: rect];
+        // Disable cursorRects so that the cursor doesn't get updated by events
+        // in NSApp (like resizing TextViews), we want to handle the cursor
+        // changes from within MPL with set_cursor() ourselves
+        [[messagebox.superview window] disableCursorRects];
     }
 
     Py_RETURN_NONE;
@@ -1022,33 +1070,24 @@ choose_save_file(PyObject* unused, PyObject* args)
 {
     int result;
     const char* title;
+    const char* directory;
     const char* default_filename;
-    if (!PyArg_ParseTuple(args, "ss", &title, &default_filename)) {
+    if (!PyArg_ParseTuple(args, "sss", &title, &directory, &default_filename)) {
         return NULL;
     }
     NSSavePanel* panel = [NSSavePanel savePanel];
-    [panel setTitle: [NSString stringWithCString: title
-                                        encoding: NSASCIIStringEncoding]];
-    NSString* ns_default_filename =
-        [[NSString alloc]
-         initWithCString: default_filename
-         encoding: NSUTF8StringEncoding];
-    [panel setNameFieldStringValue: ns_default_filename];
+    [panel setTitle: [NSString stringWithUTF8String: title]];
+    [panel setDirectoryURL: [NSURL fileURLWithPath: [NSString stringWithUTF8String: directory]
+                                       isDirectory: YES]];
+    [panel setNameFieldStringValue: [NSString stringWithUTF8String: default_filename]];
     result = [panel runModal];
-    [ns_default_filename release];
     if (result == NSModalResponseOK) {
-        NSURL* url = [panel URL];
-        NSString* filename = [url path];
+        NSString *filename = [[panel URL] path];
         if (!filename) {
             PyErr_SetString(PyExc_RuntimeError, "Failed to obtain filename");
             return 0;
         }
-        unsigned int n = [filename length];
-        unichar* buffer = malloc(n*sizeof(unichar));
-        [filename getCharacters: buffer];
-        PyObject* string = PyUnicode_FromKindAndData(PyUnicode_2BYTE_KIND, buffer, n);
-        free(buffer);
-        return string;
+        return PyUnicode_FromString([filename UTF8String]);
     }
     Py_RETURN_NONE;
 }
@@ -1147,7 +1186,7 @@ static WindowServerConnectionManager *sharedWindowServerConnectionManager = nil;
 
 - (BOOL)closeButtonPressed
 {
-    gil_call_method(manager, "close");
+    gil_call_method(manager, "_close_button_pressed");
     return YES;
 }
 
@@ -1354,16 +1393,7 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
 
 - (void)windowWillClose:(NSNotification*)notification
 {
-    PyGILState_STATE gstate;
-    PyObject* result;
-
-    gstate = PyGILState_Ensure();
-    result = PyObject_CallMethod(canvas, "close_event", "");
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-    PyGILState_Release(gstate);
+    PROCESS_EVENT("CloseEvent", "sO", "close_event", canvas);
 }
 
 - (BOOL)windowShouldClose:(NSNotification*)notification
@@ -1389,38 +1419,22 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
 
 - (void)mouseEntered:(NSEvent *)event
 {
-    PyGILState_STATE gstate;
-    PyObject* result;
-
     int x, y;
     NSPoint location = [event locationInWindow];
     location = [self convertPoint: location fromView: nil];
     x = location.x * device_scale;
     y = location.y * device_scale;
-
-    gstate = PyGILState_Ensure();
-    result = PyObject_CallMethod(canvas, "enter_notify_event", "O(ii)",
-            Py_None, x, y);
-
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-    PyGILState_Release(gstate);
+    PROCESS_EVENT("LocationEvent", "sOii", "figure_enter_event", canvas, x, y);
 }
 
 - (void)mouseExited:(NSEvent *)event
 {
-    PyGILState_STATE gstate;
-    PyObject* result;
-
-    gstate = PyGILState_Ensure();
-    result = PyObject_CallMethod(canvas, "leave_notify_event", "");
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-    PyGILState_Release(gstate);
+    int x, y;
+    NSPoint location = [event locationInWindow];
+    location = [self convertPoint: location fromView: nil];
+    x = location.x * device_scale;
+    y = location.y * device_scale;
+    PROCESS_EVENT("LocationEvent", "sOii", "figure_leave_event", canvas, x, y);
 }
 
 - (void)mouseDown:(NSEvent *)event
@@ -1428,8 +1442,6 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     int x, y;
     int num;
     int dblclick = 0;
-    PyObject* result;
-    PyGILState_STATE gstate;
     NSPoint location = [event locationInWindow];
     location = [self convertPoint: location fromView: nil];
     x = location.x * device_scale;
@@ -1458,22 +1470,14 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     if ([event clickCount] == 2) {
       dblclick = 1;
     }
-    gstate = PyGILState_Ensure();
-    result = PyObject_CallMethod(canvas, "button_press_event", "iiii", x, y, num, dblclick);
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-
-    PyGILState_Release(gstate);
+    PROCESS_EVENT("MouseEvent", "sOiiiOii", "button_press_event", canvas,
+                  x, y, num, Py_None /* key */, 0 /* step */, dblclick);
 }
 
 - (void)mouseUp:(NSEvent *)event
 {
     int num;
     int x, y;
-    PyObject* result;
-    PyGILState_STATE gstate;
     NSPoint location = [event locationInWindow];
     location = [self convertPoint: location fromView: nil];
     x = location.x * device_scale;
@@ -1488,14 +1492,8 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
          case NSEventTypeRightMouseUp: num = 3; break;
          default: return; /* Unknown mouse event */
     }
-    gstate = PyGILState_Ensure();
-    result = PyObject_CallMethod(canvas, "button_release_event", "iii", x, y, num);
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-
-    PyGILState_Release(gstate);
+    PROCESS_EVENT("MouseEvent", "sOiii", "button_release_event", canvas,
+                  x, y, num);
 }
 
 - (void)mouseMoved:(NSEvent *)event
@@ -1505,14 +1503,7 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     location = [self convertPoint: location fromView: nil];
     x = location.x * device_scale;
     y = location.y * device_scale;
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    PyObject* result = PyObject_CallMethod(canvas, "motion_notify_event", "ii", x, y);
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-
-    PyGILState_Release(gstate);
+    PROCESS_EVENT("MouseEvent", "sOii", "motion_notify_event", canvas, x, y);
 }
 
 - (void)mouseDragged:(NSEvent *)event
@@ -1522,14 +1513,7 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     location = [self convertPoint: location fromView: nil];
     x = location.x * device_scale;
     y = location.y * device_scale;
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    PyObject* result = PyObject_CallMethod(canvas, "motion_notify_event", "ii", x, y);
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-
-    PyGILState_Release(gstate);
+    PROCESS_EVENT("MouseEvent", "sOii", "motion_notify_event", canvas, x, y);
 }
 
 - (void)rightMouseDown:(NSEvent *)event { [self mouseDown: event]; }
@@ -1640,38 +1624,30 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
 
 - (void)keyDown:(NSEvent*)event
 {
-    PyObject* result;
     const char* s = [self convertKeyEvent: event];
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    if (!s) {
-        result = PyObject_CallMethod(canvas, "key_press_event", "O", Py_None);
+    NSPoint location = [[self window] mouseLocationOutsideOfEventStream];
+    location = [self convertPoint: location fromView: nil];
+    int x = location.x * device_scale,
+        y = location.y * device_scale;
+    if (s) {
+        PROCESS_EVENT("KeyEvent", "sOsii", "key_press_event", canvas, s, x, y);
     } else {
-        result = PyObject_CallMethod(canvas, "key_press_event", "s", s);
+        PROCESS_EVENT("KeyEvent", "sOOii", "key_press_event", canvas, Py_None, x, y);
     }
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-
-    PyGILState_Release(gstate);
 }
 
 - (void)keyUp:(NSEvent*)event
 {
-    PyObject* result;
     const char* s = [self convertKeyEvent: event];
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    if (!s) {
-        result = PyObject_CallMethod(canvas, "key_release_event", "O", Py_None);
+    NSPoint location = [[self window] mouseLocationOutsideOfEventStream];
+    location = [self convertPoint: location fromView: nil];
+    int x = location.x * device_scale,
+        y = location.y * device_scale;
+    if (s) {
+        PROCESS_EVENT("KeyEvent", "sOsii", "key_release_event", canvas, s, x, y);
     } else {
-        result = PyObject_CallMethod(canvas, "key_release_event", "s", s);
+        PROCESS_EVENT("KeyEvent", "sOOii", "key_release_event", canvas, Py_None, x, y);
     }
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-
-    PyGILState_Release(gstate);
 }
 
 - (void)scrollWheel:(NSEvent*)event
@@ -1685,16 +1661,8 @@ static int _copy_agg_buffer(CGContextRef cr, PyObject *renderer)
     NSPoint point = [self convertPoint: location fromView: nil];
     int x = (int)round(point.x * device_scale);
     int y = (int)round(point.y * device_scale - 1);
-
-    PyObject* result;
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    result = PyObject_CallMethod(canvas, "scroll_event", "iii", x, y, step);
-    if (result)
-        Py_DECREF(result);
-    else
-        PyErr_Print();
-
-    PyGILState_Release(gstate);
+    PROCESS_EVENT("MouseEvent", "sOiiOOi", "scroll_event", canvas,
+                  x, y, Py_None /* button */, Py_None /* key */, step);
 }
 
 - (BOOL)acceptsFirstResponder
@@ -1938,23 +1906,16 @@ static struct PyModuleDef moduledef = {
 
 PyObject* PyInit__macosx(void)
 {
-    if (PyType_Ready(&FigureCanvasType) < 0
-     || PyType_Ready(&FigureManagerType) < 0
-     || PyType_Ready(&NavigationToolbar2Type) < 0
-     || PyType_Ready(&TimerType) < 0)
-        return NULL;
-
-    PyObject *module = PyModule_Create(&moduledef);
-    if (!module) {
+    PyObject *m;
+    if (!(m = PyModule_Create(&moduledef))
+        || prepare_and_add_type(&FigureCanvasType, m)
+        || prepare_and_add_type(&FigureManagerType, m)
+        || prepare_and_add_type(&NavigationToolbar2Type, m)
+        || prepare_and_add_type(&TimerType, m)) {
+        Py_XDECREF(m);
         return NULL;
     }
-
-    PyModule_AddObject(module, "FigureCanvas", (PyObject*) &FigureCanvasType);
-    PyModule_AddObject(module, "FigureManager", (PyObject*) &FigureManagerType);
-    PyModule_AddObject(module, "NavigationToolbar2", (PyObject*) &NavigationToolbar2Type);
-    PyModule_AddObject(module, "Timer", (PyObject*) &TimerType);
-
-    return module;
+    return m;
 }
 
 #pragma GCC visibility pop

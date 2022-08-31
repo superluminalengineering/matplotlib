@@ -12,6 +12,7 @@ import subprocess
 import sys
 import sysconfig
 import tarfile
+from tempfile import TemporaryDirectory
 import textwrap
 import urllib.request
 
@@ -197,9 +198,12 @@ if os.path.exists(mplsetup_cfg):
 options = {
     'backend': config.get('rc_options', 'backend', fallback=None),
     'system_freetype': config.getboolean(
-        'libs', 'system_freetype', fallback=sys.platform.startswith('aix')),
+        'libs', 'system_freetype',
+        fallback=sys.platform.startswith(('aix', 'os400'))
+    ),
     'system_qhull': config.getboolean(
-        'libs', 'system_qhull', fallback=False),
+        'libs', 'system_qhull', fallback=sys.platform.startswith('os400')
+    ),
 }
 
 
@@ -398,16 +402,6 @@ class Matplotlib(SetupPackage):
                 "win32": ["ole32", "shell32", "user32"],
             }.get(sys.platform, [])))
         yield ext
-        # contour
-        ext = Extension(
-            "matplotlib._contour", [
-                "src/_contour.cpp",
-                "src/_contour_wrapper.cpp",
-                "src/py_converters.cpp",
-            ])
-        add_numpy_flags(ext)
-        add_libagg_flags(ext)
-        yield ext
         # ft2font
         ext = Extension(
             "matplotlib.ft2font", [
@@ -488,6 +482,7 @@ class Tests(OptionalPackage):
                 *_pkg_data_helper('matplotlib', 'tests/baseline_images'),
                 *_pkg_data_helper('matplotlib', 'tests/tinypages'),
                 'tests/cmr10.pfb',
+                'tests/Courier10PitchBT-Bold.pfb',
                 'tests/mpltest.ttf',
                 'tests/test_*.ipynb',
             ],
@@ -627,6 +622,13 @@ class FreeType(SetupPackage):
                 },
                 **env,
             }
+            configure_ac = Path(src_path, "builds/unix/configure.ac")
+            if ((src_path / "autogen.sh").exists()
+                    and not configure_ac.exists()):
+                print(f"{configure_ac} does not exist. "
+                      f"Using sh autogen.sh to generate.")
+                subprocess.check_call(
+                    ["sh", "./autogen.sh"], env=env, cwd=src_path)
             env["CFLAGS"] = env.get("CFLAGS", "") + " -fPIC"
             configure = [
                 "./configure", "--with-zlib=no", "--with-bzip2=no",
@@ -668,6 +670,7 @@ class FreeType(SetupPackage):
             sln_path = base_path / vc / "freetype.sln"
             # https://developercommunity.visualstudio.com/comments/190992/view.html
             (sln_path.parent / "Directory.Build.props").write_text(
+                "<?xml version='1.0' encoding='utf-8'?>"
                 "<Project>"
                 "<PropertyGroup>"
                 # WindowsTargetPlatformVersion must be given on a single line.
@@ -676,8 +679,8 @@ class FreeType(SetupPackage):
                 "::GetLatestSDKTargetPlatformVersion('Windows', '10.0')"
                 ")</WindowsTargetPlatformVersion>"
                 "</PropertyGroup>"
-                "</Project>"
-            )
+                "</Project>",
+                encoding="utf-8")
             # It is not a trivial task to determine PlatformToolset to plug it
             # into msbuild command, and Directory.Build.props will not override
             # the value in the project file.
@@ -693,7 +696,23 @@ class FreeType(SetupPackage):
                 f.write(vcxproj)
 
             cc = get_ccompiler()
-            cc.initialize()  # Get msbuild in the %PATH% of cc.spawn.
+            cc.initialize()
+            # On setuptools versions that use "local" distutils,
+            # ``cc.spawn(["msbuild", ...])`` no longer manages to locate the
+            # right executable, even though they are correctly on the PATH,
+            # because only the env kwarg to Popen() is updated, and not
+            # os.environ["PATH"]. Instead, use shutil.which to walk the PATH
+            # and get absolute executable paths.
+            with TemporaryDirectory() as tmpdir:
+                dest = Path(tmpdir, "path")
+                cc.spawn([
+                    sys.executable, "-c",
+                    "import pathlib, shutil, sys\n"
+                    "dest = pathlib.Path(sys.argv[1])\n"
+                    "dest.write_text(shutil.which('msbuild'))\n",
+                    str(dest),
+                ])
+                msbuild_path = dest.read_text()
             # Freetype 2.10.0+ support static builds.
             msbuild_config = (
                 "Release Static"
@@ -701,7 +720,7 @@ class FreeType(SetupPackage):
                 else "Release"
             )
 
-            cc.spawn(["msbuild", str(sln_path),
+            cc.spawn([msbuild_path, str(sln_path),
                       "/t:Clean;Build",
                       f"/p:Configuration={msbuild_config};"
                       f"Platform={msbuild_platform}"])

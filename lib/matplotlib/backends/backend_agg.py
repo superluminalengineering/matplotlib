@@ -21,12 +21,9 @@ Still TODO:
 .. _Anti-Grain Geometry: http://agg.sourceforge.net/antigrain.com
 """
 
-try:
-    import threading
-except ImportError:
-    import dummy_threading as threading
 from contextlib import nullcontext
 from math import radians, cos, sin
+import threading
 
 import numpy as np
 
@@ -34,7 +31,7 @@ import matplotlib as mpl
 from matplotlib import _api, cbook
 from matplotlib.backend_bases import (
     _Backend, FigureCanvasBase, FigureManagerBase, RendererBase)
-from matplotlib.font_manager import findfont, get_font
+from matplotlib.font_manager import fontManager as _fontManager, get_font
 from matplotlib.ft2font import (LOAD_FORCE_AUTOHINT, LOAD_NO_HINTING,
                                 LOAD_DEFAULT, LOAD_NO_AUTOHINT)
 from matplotlib.mathtext import MathTextParser
@@ -275,7 +272,7 @@ class RendererAgg(RendererBase):
         """
         Get the `.FT2Font` for *font_prop*, clear its buffer, and set its size.
         """
-        font = get_font(findfont(font_prop))
+        font = get_font(_fontManager._find_fonts_by_props(font_prop))
         font.clear()
         size = font_prop.get_size_in_points()
         font.set_size(size, self.dpi)
@@ -390,6 +387,8 @@ class RendererAgg(RendererBase):
 class FigureCanvasAgg(FigureCanvasBase):
     # docstring inherited
 
+    _lastKey = None  # Overwritten per-instance on the first draw.
+
     def copy_from_bbox(self, bbox):
         renderer = self.get_renderer()
         return renderer.copy_from_bbox(bbox)
@@ -415,8 +414,7 @@ class FigureCanvasAgg(FigureCanvasBase):
     def get_renderer(self, cleared=False):
         w, h = self.figure.bbox.size
         key = w, h, self.figure.dpi
-        reuse_renderer = (hasattr(self, "renderer")
-                          and getattr(self, "_lastKey", None) == key)
+        reuse_renderer = (self._lastKey == key)
         if not reuse_renderer:
             self.renderer = RendererAgg(w, h, self.figure.dpi)
             self._lastKey = key

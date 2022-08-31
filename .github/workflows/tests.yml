@@ -14,6 +14,8 @@ on:
   schedule:
     # 3:47 UTC on Saturdays
     - cron: "47 3 * * 6"
+  workflow_dispatch:
+    workflow: "*"
 
 env:
   NO_AT_BRIDGE: 1  # Necessary for GTK3 interactive test.
@@ -22,7 +24,7 @@ env:
 
 jobs:
   test:
-    if: "github.repository == 'matplotlib/matplotlib' && !contains(github.event.head_commit.message, '[ci skip]') && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip github]')"
+    if: "github.event_name == 'workflow_dispatch' || github.repository == 'matplotlib/matplotlib' && !contains(github.event.head_commit.message, '[ci skip]') && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[skip github]')"
     name: "Python ${{ matrix.python-version }} on ${{ matrix.os }} ${{ matrix.name-suffix }}"
     runs-on: ${{ matrix.os }}
 
@@ -31,29 +33,23 @@ jobs:
       matrix:
         include:
           - name-suffix: "(Minimum Versions)"
-            os: ubuntu-18.04
+            os: ubuntu-20.04
             python-version: 3.8
             extra-requirements: '-c requirements/testing/minver.txt'
             pyqt5-ver: '==5.11.2 sip==5.0.0'  # oldest versions with a Py3.8 wheel.
             delete-font-cache: true
-            XVFB_RUN: xvfb-run -a
-          - os: ubuntu-18.04
+          - os: ubuntu-20.04
             python-version: 3.8
             extra-requirements: '-r requirements/testing/extra.txt'
-            XVFB_RUN: xvfb-run -a
             CFLAGS: "-fno-lto"  # Ensure that disabling LTO works.
           - os: ubuntu-20.04
             python-version: 3.9
             extra-requirements: '-r requirements/testing/extra.txt'
-            XVFB_RUN: xvfb-run -a
           - os: ubuntu-20.04
             python-version: '3.10'
-            # Re-add this when extra dependencies have wheels.
-            # extra-requirements: '-r requirements/testing/extra.txt'
-            XVFB_RUN: xvfb-run -a
+            extra-requirements: '-r requirements/testing/extra.txt'
           - os: macos-latest
             python-version: 3.8
-            XVFB_RUN: ""
 
     steps:
       - uses: actions/checkout@v3
@@ -61,7 +57,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -113,7 +109,7 @@ jobs:
           macOS)
             brew install ccache
             brew tap homebrew/cask-fonts
-            brew install font-noto-sans-cjk-sc
+            brew install font-noto-sans-cjk
             ;;
           esac
 
@@ -161,8 +157,8 @@ jobs:
 
           # Install dependencies from PyPI.
           python -m pip install --upgrade $PRE \
-            cycler fonttools kiwisolver numpy packaging pillow pyparsing \
-            python-dateutil setuptools-scm \
+            'contourpy>=1.0.1' cycler fonttools kiwisolver numpy packaging \
+            pillow pyparsing python-dateutil setuptools-scm \
             -r requirements/testing/all.txt \
             ${{ matrix.extra-requirements }}
 
@@ -196,7 +192,6 @@ jobs:
               echo 'PySide2 is available' ||
               echo 'PySide2 is not available'
           fi
-          # Qt6 crashes on Github's ubuntu 18.04 runner.
           if [[ "${{ matrix.os }}" = ubuntu-20.04 ]]; then
             python -mpip install --upgrade pyqt6 &&
               python -c 'import PyQt6.QtCore' &&
@@ -220,14 +215,6 @@ jobs:
         if: ${{ github.event_name == 'schedule' && matrix.name-suffix != '(Minimum Versions)' }}
         run: |
           python -m pip install -i https://pypi.anaconda.org/scipy-wheels-nightly/simple --upgrade numpy pandas
-
-          # Turn all warnings to errors, except ignore the distutils deprecations and the find_spec warning
-          cat >> pytest.ini << EOF
-          filterwarnings =
-              error
-              ignore:.*distutils:DeprecationWarning
-              ignore:DynamicImporter.find_spec\(\) not found; falling back to find_module\(\):ImportWarning
-          EOF
 
       - name: Install Matplotlib
         run: |
@@ -266,7 +253,7 @@ jobs:
 
       - name: Run pytest
         run: |
-          ${{ matrix.XVFB_RUN }} python -mpytest -raR -n auto \
+          python -mpytest -raR -n auto \
             --maxfail=50 --timeout=300 --durations=25 \
             --cov-report=xml --cov=lib --log-level=DEBUG --color=yes
 

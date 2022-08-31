@@ -17,7 +17,8 @@ from mpl_toolkits.axes_grid1 import (
 from mpl_toolkits.axes_grid1.anchored_artists import (
     AnchoredSizeBar, AnchoredDirectionArrows)
 from mpl_toolkits.axes_grid1.axes_divider import (
-    HBoxDivider, make_axes_area_auto_adjustable)
+    Divider, HBoxDivider, make_axes_area_auto_adjustable)
+from mpl_toolkits.axes_grid1.axes_rgb import RGBAxes
 from mpl_toolkits.axes_grid1.inset_locator import (
     zoomed_inset_axes, mark_inset, inset_axes, BboxConnectorPatch)
 import mpl_toolkits.axes_grid1.mpl_axes
@@ -39,7 +40,6 @@ def test_divider_append_axes():
         "right": divider.append_axes("right", 1.2, pad=0.1, sharey=ax),
     }
     fig.canvas.draw()
-    renderer = fig.canvas.get_renderer()
     bboxes = {k: axs[k].get_window_extent() for k in axs}
     dpi = fig.dpi
     assert bboxes["top"].height == pytest.approx(1.2 * dpi)
@@ -124,7 +124,6 @@ def test_inset_locator():
     ny, nx = Z.shape
     Z2[30:30+ny, 30:30+nx] = Z
 
-    # extent = [-3, 4, -4, 3]
     ax.imshow(Z2, extent=extent, interpolation="nearest",
               origin="lower")
 
@@ -166,7 +165,6 @@ def test_inset_axes():
     ny, nx = Z.shape
     Z2[30:30+ny, 30:30+nx] = Z
 
-    # extent = [-3, 4, -4, 3]
     ax.imshow(Z2, extent=extent, interpolation="nearest",
               origin="lower")
 
@@ -378,10 +376,9 @@ def test_image_grid():
 
     fig = plt.figure(1, (4, 4))
     grid = ImageGrid(fig, 111, nrows_ncols=(2, 2), axes_pad=0.1)
-
+    assert grid.get_axes_pad() == (0.1, 0.1)
     for i in range(4):
         grid[i].imshow(im, interpolation='nearest')
-        grid[i].set_title('test {0}{0}'.format(i))
 
 
 def test_gettightbbox():
@@ -494,6 +491,7 @@ def test_grid_axes_lists():
     assert_array_equal(grid, grid.axes_all)
     assert_array_equal(grid.axes_row, np.transpose(grid.axes_column))
     assert_array_equal(grid, np.ravel(grid.axes_row), "row")
+    assert grid.get_geometry() == (2, 3)
     grid = Grid(fig, 111, (2, 3), direction="column")
     assert_array_equal(grid, np.ravel(grid.axes_column), "column")
 
@@ -507,6 +505,29 @@ def test_grid_axes_position(direction):
     assert loc[1]._nx > loc[0]._nx and loc[2]._ny < loc[0]._ny
     assert loc[0]._nx == loc[2]._nx and loc[0]._ny == loc[1]._ny
     assert loc[3]._nx == loc[1]._nx and loc[3]._ny == loc[2]._ny
+
+
+@pytest.mark.parametrize('rect, ngrids, error, message', (
+    ((1, 1), None, TypeError, "Incorrect rect format"),
+    (111, -1, ValueError, "ngrids must be positive"),
+    (111, 7, ValueError, "ngrids must be positive"),
+))
+def test_grid_errors(rect, ngrids, error, message):
+    fig = plt.figure()
+    with pytest.raises(error, match=message):
+        Grid(fig, rect, (2, 3), ngrids=ngrids)
+
+
+@pytest.mark.parametrize('anchor, error, message', (
+    (None, TypeError, "anchor must be str"),
+    ("CC", ValueError, "'CC' is not a valid value for anchor"),
+    ((1, 1, 1), TypeError, "anchor must be str"),
+))
+def test_divider_errors(anchor, error, message):
+    fig = plt.figure()
+    with pytest.raises(error, match=message):
+        Divider(fig, [0, 0, 1, 1], [Size.Fixed(1)], [Size.Fixed(1)],
+                anchor=anchor)
 
 
 @check_figures_equal(extensions=["png"])
@@ -531,8 +552,19 @@ def test_auto_adjustable():
     pad = 0.1
     make_axes_area_auto_adjustable(ax, pad=pad)
     fig.canvas.draw()
-    tbb = ax.get_tightbbox(fig._cachedRenderer)
+    tbb = ax.get_tightbbox()
     assert tbb.x0 == pytest.approx(pad * fig.dpi)
     assert tbb.x1 == pytest.approx(fig.bbox.width - pad * fig.dpi)
     assert tbb.y0 == pytest.approx(pad * fig.dpi)
     assert tbb.y1 == pytest.approx(fig.bbox.height - pad * fig.dpi)
+
+
+@image_comparison(['rgb_axes.png'], remove_text=True)
+def test_rgb_axes():
+    fig = plt.figure()
+    ax = RGBAxes(fig, (0.1, 0.1, 0.8, 0.8), pad=0.1)
+    rng = np.random.default_rng(19680801)
+    r = rng.random((5, 5))
+    g = rng.random((5, 5))
+    b = rng.random((5, 5))
+    ax.imshow_rgb(r, g, b, interpolation='none')

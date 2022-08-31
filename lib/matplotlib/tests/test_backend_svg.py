@@ -1,21 +1,20 @@
 import datetime
 from io import BytesIO
+from pathlib import Path
 import xml.etree.ElementTree
 import xml.parsers.expat
 
-import numpy as np
 import pytest
+
+import numpy as np
 
 import matplotlib as mpl
 from matplotlib.figure import Figure
 from matplotlib.text import Text
 import matplotlib.pyplot as plt
-from matplotlib.testing.decorators import image_comparison, check_figures_equal
-
-
-needs_usetex = pytest.mark.skipif(
-    not mpl.checkdep_usetex(True),
-    reason="This test needs a TeX installation")
+from matplotlib.testing.decorators import check_figures_equal, image_comparison
+from matplotlib.testing._markers import needs_usetex
+from matplotlib import font_manager as fm
 
 
 def test_visibility():
@@ -291,17 +290,17 @@ def test_url():
 
     # collections
     s = ax.scatter([1, 2, 3], [4, 5, 6])
-    s.set_urls(['http://example.com/foo', 'http://example.com/bar', None])
+    s.set_urls(['https://example.com/foo', 'https://example.com/bar', None])
 
     # Line2D
     p, = plt.plot([1, 3], [6, 5])
-    p.set_url('http://example.com/baz')
+    p.set_url('https://example.com/baz')
 
     b = BytesIO()
     fig.savefig(b, format='svg')
     b = b.getvalue()
     for v in [b'foo', b'bar', b'baz']:
-        assert b'http://example.com/' + v in b
+        assert b'https://example.com/' + v in b
 
 
 def test_url_tick(monkeypatch):
@@ -310,13 +309,13 @@ def test_url_tick(monkeypatch):
     fig1, ax = plt.subplots()
     ax.scatter([1, 2, 3], [4, 5, 6])
     for i, tick in enumerate(ax.yaxis.get_major_ticks()):
-        tick.set_url(f'http://example.com/{i}')
+        tick.set_url(f'https://example.com/{i}')
 
     fig2, ax = plt.subplots()
     ax.scatter([1, 2, 3], [4, 5, 6])
     for i, tick in enumerate(ax.yaxis.get_major_ticks()):
-        tick.label1.set_url(f'http://example.com/{i}')
-        tick.label2.set_url(f'http://example.com/{i}')
+        tick.label1.set_url(f'https://example.com/{i}')
+        tick.label2.set_url(f'https://example.com/{i}')
 
     b1 = BytesIO()
     fig1.savefig(b1, format='svg')
@@ -327,7 +326,7 @@ def test_url_tick(monkeypatch):
     b2 = b2.getvalue()
 
     for i in range(len(ax.yaxis.get_major_ticks())):
-        assert f'http://example.com/{i}'.encode('ascii') in b1
+        assert f'https://example.com/{i}'.encode('ascii') in b1
     assert b1 == b2
 
 
@@ -426,7 +425,7 @@ def test_svg_metadata():
         **{k: [f'{k} bar', f'{k} baz'] for k in multi_value},
     }
 
-    fig, ax = plt.subplots()
+    fig = plt.figure()
     with BytesIO() as fd:
         fig.savefig(fd, format='svg', metadata=metadata)
         buf = fd.getvalue().decode()
@@ -469,3 +468,62 @@ def test_svg_metadata():
     values = [node.text for node in
               rdf.findall(f'./{CCNS}Work/{DCNS}subject/{RDFNS}Bag/{RDFNS}li')]
     assert values == metadata['Keywords']
+
+
+@image_comparison(["multi_font_aspath.svg"], tol=1.8)
+def test_multi_font_type3():
+    fp = fm.FontProperties(family=["WenQuanYi Zen Hei"])
+    if Path(fm.findfont(fp)).name != "wqy-zenhei.ttc":
+        pytest.skip("Font may be missing")
+
+    plt.rc('font', family=['DejaVu Sans', 'WenQuanYi Zen Hei'], size=27)
+    plt.rc('svg', fonttype='path')
+
+    fig = plt.figure()
+    fig.text(0.15, 0.475, "There are 几个汉字 in between!")
+
+
+@image_comparison(["multi_font_astext.svg"])
+def test_multi_font_type42():
+    fp = fm.FontProperties(family=["WenQuanYi Zen Hei"])
+    if Path(fm.findfont(fp)).name != "wqy-zenhei.ttc":
+        pytest.skip("Font may be missing")
+
+    fig = plt.figure()
+    plt.rc('svg', fonttype='none')
+
+    plt.rc('font', family=['DejaVu Sans', 'WenQuanYi Zen Hei'], size=27)
+    fig.text(0.15, 0.475, "There are 几个汉字 in between!")
+
+
+@pytest.mark.parametrize('metadata,error,message', [
+    ({'Date': 1}, TypeError, "Invalid type for Date metadata. Expected str"),
+    ({'Date': [1]}, TypeError,
+     "Invalid type for Date metadata. Expected iterable"),
+    ({'Keywords': 1}, TypeError,
+     "Invalid type for Keywords metadata. Expected str"),
+    ({'Keywords': [1]}, TypeError,
+     "Invalid type for Keywords metadata. Expected iterable"),
+    ({'Creator': 1}, TypeError,
+     "Invalid type for Creator metadata. Expected str"),
+    ({'Creator': [1]}, TypeError,
+     "Invalid type for Creator metadata. Expected iterable"),
+    ({'Title': 1}, TypeError,
+     "Invalid type for Title metadata. Expected str"),
+    ({'Format': 1}, TypeError,
+     "Invalid type for Format metadata. Expected str"),
+    ({'Foo': 'Bar'}, ValueError, "Unknown metadata key"),
+    ])
+def test_svg_incorrect_metadata(metadata, error, message):
+    with pytest.raises(error, match=message), BytesIO() as fd:
+        fig = plt.figure()
+        fig.savefig(fd, format='svg', metadata=metadata)
+
+
+def test_svg_escape():
+    fig = plt.figure()
+    fig.text(0.5, 0.5, "<\'\"&>", gid="<\'\"&>")
+    with BytesIO() as fd:
+        fig.savefig(fd, format='svg')
+        buf = fd.getvalue().decode()
+        assert '&lt;&apos;&quot;&amp;&gt;"' in buf

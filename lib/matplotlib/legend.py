@@ -162,8 +162,11 @@ bbox_to_anchor : `.BboxBase`, 2-tuple, or 4-tuple of floats
 
         loc='upper right', bbox_to_anchor=(0.5, 0.5)
 
-ncol : int, default: 1
+ncols : int, default: 1
     The number of columns that the legend has.
+
+    For backward compatibility, the spelling *ncol* is also supported
+    but it is discouraged. If both are given, *ncols* takes precedence.
 
 prop : None or `matplotlib.font_manager.FontProperties` or dict
     The font properties of the legend. If None (default), the current
@@ -254,6 +257,10 @@ title_fontsize : int or {'xx-small', 'x-small', 'small', 'medium', 'large', \
     to set the fontsize alongside other font properties, use the *size*
     parameter in *title_fontproperties*.
 
+alignment : {'center', 'left', 'right'}, default: 'center'
+    The alignment of the legend title and the box of entries. The entries
+    are aligned as a single block, so that markers always lined up.
+
 borderpad : float, default: :rc:`legend.borderpad`
     The fractional whitespace inside the legend border, in font-size units.
 
@@ -294,6 +301,7 @@ class Legend(Artist):
     def __str__(self):
         return "Legend"
 
+    @_api.make_keyword_only("3.6", "loc")
     @_docstring.dedent_interpd
     def __init__(
         self, parent, handles, labels,
@@ -316,7 +324,7 @@ class Legend(Artist):
         borderaxespad=None,  # pad between the axes and legend border
         columnspacing=None,  # spacing between columns
 
-        ncol=1,     # number of columns
+        ncols=1,     # number of columns
         mode=None,  # horizontal distribution of columns: None or "expand"
 
         fancybox=None,  # True: fancy box, False: rounded box, None: rcParam
@@ -332,6 +340,9 @@ class Legend(Artist):
         frameon=None,         # draw frame
         handler_map=None,
         title_fontproperties=None,  # properties for the legend title
+        alignment="center",       # control the alignment within the legend box
+        *,
+        ncol=1  # synonym for ncols (backward compatibility)
     ):
         """
         Parameters
@@ -417,8 +428,8 @@ class Legend(Artist):
 
         handles = list(handles)
         if len(handles) < 2:
-            ncol = 1
-        self._ncol = ncol
+            ncols = 1
+        self._ncols = ncols if ncols != 1 else ncol
 
         if self.numpoints <= 0:
             raise ValueError("numpoints must be > 0; it was %d" % numpoints)
@@ -498,6 +509,9 @@ class Legend(Artist):
                      else mpl.rcParams["legend.frameon"])
         )
         self._set_artist_props(self.legendPatch)
+
+        _api.check_in_list(["center", "left", "right"], alignment=alignment)
+        self._alignment = alignment
 
         # init with null renderer
         self._init_legend_box(handles, labels, markerfirst)
@@ -579,6 +593,10 @@ class Legend(Artist):
         self._loc_real = loc
         self.stale = True
         self._legend_box.set_offset(self._findoffset)
+
+    def set_ncols(self, ncols):
+        """Set the number of columns."""
+        self._ncols = ncols
 
     def _get_loc(self):
         return self._loc_real
@@ -766,12 +784,12 @@ class Legend(Artist):
                 handles_and_labels.append((handlebox, textbox))
 
         columnbox = []
-        # array_split splits n handles_and_labels into ncol columns, with the
-        # first n%ncol columns having an extra entry.  filter(len, ...) handles
-        # the case where n < ncol: the last ncol-n columns are empty and get
-        # filtered out.
-        for handles_and_labels_column \
-                in filter(len, np.array_split(handles_and_labels, self._ncol)):
+        # array_split splits n handles_and_labels into ncols columns, with the
+        # first n%ncols columns having an extra entry.  filter(len, ...)
+        # handles the case where n < ncols: the last ncols-n columns are empty
+        # and get filtered out.
+        for handles_and_labels_column in filter(
+                len, np.array_split(handles_and_labels, self._ncols)):
             # pack handlebox and labelbox into itembox
             itemboxes = [HPacker(pad=0,
                                  sep=self.handletextpad * fontsize,
@@ -794,7 +812,7 @@ class Legend(Artist):
         self._legend_title_box = TextArea("")
         self._legend_box = VPacker(pad=self.borderpad * fontsize,
                                    sep=self.labelspacing * fontsize,
-                                   align="center",
+                                   align=self._alignment,
                                    children=[self._legend_title_box,
                                              self._legend_handle_box])
         self._legend_box.set_figure(self.figure)
@@ -857,10 +875,41 @@ class Legend(Artist):
         r"""Return the list of `~.text.Text`\s in the legend."""
         return silent_list('Text', self.texts)
 
+    def set_alignment(self, alignment):
+        """
+        Set the alignment of the legend title and the box of entries.
+
+        The entries are aligned as a single block, so that markers always
+        lined up.
+
+        Parameters
+        ----------
+        alignment : {'center', 'left', 'right'}.
+
+        """
+        _api.check_in_list(["center", "left", "right"], alignment=alignment)
+        self._alignment = alignment
+        self._legend_box.align = alignment
+
+    def get_alignment(self):
+        """Get the alignment value of the legend box"""
+        return self._legend_box.align
+
     def set_title(self, title, prop=None):
         """
-        Set the legend title. Fontproperties can be optionally set
-        with *prop* parameter.
+        Set legend title and title style.
+
+        Parameters
+        ----------
+        title : str
+            The legend title.
+
+        prop : `.font_manager.FontProperties` or `str` or `pathlib.Path`
+            The font properties of the legend title.
+            If a `str`, it is interpreted as a fontconfig pattern parsed by
+            `.FontProperties`.  If a `pathlib.Path`, it is interpreted as the
+            absolute path to a font file.
+
         """
         self._legend_title_box._text.set_text(title)
         if title:
@@ -882,10 +931,10 @@ class Legend(Artist):
     def get_window_extent(self, renderer=None):
         # docstring inherited
         if renderer is None:
-            renderer = self.figure._cachedRenderer
+            renderer = self.figure._get_renderer()
         return self._legend_box.get_window_extent(renderer=renderer)
 
-    def get_tightbbox(self, renderer):
+    def get_tightbbox(self, renderer=None):
         # docstring inherited
         return self._legend_box.get_window_extent(renderer)
 
@@ -1091,7 +1140,7 @@ def _get_legend_handles(axs, legend_handler_map=None):
         label = handle.get_label()
         if label != '_nolegend_' and has_handler(handler_map, handle):
             yield handle
-        elif (label not in ['_nolegend_', ''] and
+        elif (label and not label.startswith('_') and
                 not has_handler(handler_map, handle)):
             _api.warn_external(
                              "Legend does not support handles for {0} "

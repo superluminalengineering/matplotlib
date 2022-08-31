@@ -24,7 +24,8 @@ Container classes for `.Artist`\s.
 
 import numpy as np
 
-from matplotlib import _api, _docstring, rcParams
+import matplotlib as mpl
+from matplotlib import _api, _docstring
 import matplotlib.artist as martist
 import matplotlib.path as mpath
 import matplotlib.text as mtext
@@ -345,8 +346,10 @@ class OffsetBox(martist.Artist):
         w, h, xd, yd, offsets = self.get_extent_offsets(renderer)
         return w, h, xd, yd
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
         # docstring inherited
+        if renderer is None:
+            renderer = self.figure._get_renderer()
         w, h, xd, yd, offsets = self.get_extent_offsets(renderer)
         px, py = self.get_offset(w, h, xd, yd, renderer)
         return mtransforms.Bbox.from_bounds(px - xd, py - yd, w, h)
@@ -498,6 +501,8 @@ class PaddedBox(OffsetBox):
     The `.PaddedBox` contains a `.FancyBboxPatch` that is used to visualize
     it when rendering.
     """
+
+    @_api.make_keyword_only("3.6", name="draw_frame")
     def __init__(self, child, pad=None, draw_frame=False, patch_attrs=None):
         """
         Parameters
@@ -631,8 +636,10 @@ class DrawingArea(OffsetBox):
         """Return offset of the container."""
         return self._offset
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
         # docstring inherited
+        if renderer is None:
+            renderer = self.figure._get_renderer()
         w, h, xd, yd = self.get_extent(renderer)
         ox, oy = self.get_offset()  # w, h, xd, yd)
 
@@ -688,11 +695,10 @@ class TextArea(OffsetBox):
     child text.
     """
 
-    @_api.delete_parameter("3.4", "minimumdescent")
+    @_api.make_keyword_only("3.6", name="textprops")
     def __init__(self, s,
                  textprops=None,
                  multilinebaseline=False,
-                 minimumdescent=True,
                  ):
         """
         Parameters
@@ -705,9 +711,6 @@ class TextArea(OffsetBox):
         multilinebaseline : bool, default: False
             Whether the baseline for multiline text is adjusted so that it
             is (approximately) center-aligned with single-line text.
-        minimumdescent : bool, default: True
-            If `True`, the box has a minimum descent of "p".  This is now
-            effectively always True.
         """
         if textprops is None:
             textprops = {}
@@ -719,7 +722,6 @@ class TextArea(OffsetBox):
         self._text.set_transform(self.offset_transform +
                                  self._baseline_transform)
         self._multilinebaseline = multilinebaseline
-        self._minimumdescent = minimumdescent
 
     def set_text(self, s):
         """Set the text of this area as a string."""
@@ -748,26 +750,6 @@ class TextArea(OffsetBox):
         """
         return self._multilinebaseline
 
-    @_api.deprecated("3.4")
-    def set_minimumdescent(self, t):
-        """
-        Set minimumdescent.
-
-        If True, extent of the single line text is adjusted so that
-        its descent is at least the one of the glyph "p".
-        """
-        # The current implementation of Text._get_layout always behaves as if
-        # this is True.
-        self._minimumdescent = t
-        self.stale = True
-
-    @_api.deprecated("3.4")
-    def get_minimumdescent(self):
-        """
-        Get minimumdescent.
-        """
-        return self._minimumdescent
-
     def set_transform(self, t):
         """
         set_transform is ignored.
@@ -791,8 +773,10 @@ class TextArea(OffsetBox):
         """Return offset of the container."""
         return self._offset
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
         # docstring inherited
+        if renderer is None:
+            renderer = self.figure._get_renderer()
         w, h, xd, yd = self.get_extent(renderer)
         ox, oy = self.get_offset()
         return mtransforms.Bbox.from_bounds(ox - xd, oy - yd, w, h)
@@ -892,8 +876,10 @@ class AuxTransformBox(OffsetBox):
         """Return offset of the container."""
         return self._offset
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
         # docstring inherited
+        if renderer is None:
+            renderer = self.figure._get_renderer()
         w, h, xd, yd = self.get_extent(renderer)
         ox, oy = self.get_offset()  # w, h, xd, yd)
         return mtransforms.Bbox.from_bounds(ox - xd, oy - yd, w, h)
@@ -945,6 +931,7 @@ class AnchoredOffsetbox(OffsetBox):
              'center': 10,
              }
 
+    @_api.make_keyword_only("3.6", name="pad")
     def __init__(self, loc,
                  pad=0.4, borderpad=0.5,
                  child=None, prop=None, frameon=True,
@@ -996,11 +983,11 @@ class AnchoredOffsetbox(OffsetBox):
         self.pad = pad
 
         if prop is None:
-            self.prop = FontProperties(size=rcParams["legend.fontsize"])
+            self.prop = FontProperties(size=mpl.rcParams["legend.fontsize"])
         else:
             self.prop = FontProperties._from_any(prop)
             if isinstance(prop, dict) and "size" not in prop:
-                self.prop.set_size(rcParams["legend.fontsize"])
+                self.prop.set_size(mpl.rcParams["legend.fontsize"])
 
         self.patch = FancyBboxPatch(
             xy=(0.0, 0.0), width=1., height=1.,
@@ -1074,8 +1061,11 @@ class AnchoredOffsetbox(OffsetBox):
         self._bbox_to_anchor_transform = transform
         self.stale = True
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
         # docstring inherited
+        if renderer is None:
+            renderer = self.figure._get_renderer()
+
         self._update_offset_func(renderer)
         w, h, xd, yd = self.get_extent(renderer)
         ox, oy = self.get_offset(w, h, xd, yd, renderer)
@@ -1144,6 +1134,7 @@ class AnchoredText(AnchoredOffsetbox):
     AnchoredOffsetbox with Text.
     """
 
+    @_api.make_keyword_only("3.6", name="pad")
     def __init__(self, s, loc, pad=0.4, borderpad=0.5, prop=None, **kwargs):
         """
         Parameters
@@ -1183,6 +1174,8 @@ class AnchoredText(AnchoredOffsetbox):
 
 
 class OffsetImage(OffsetBox):
+
+    @_api.make_keyword_only("3.6", name="zoom")
     def __init__(self, arr,
                  zoom=1,
                  cmap=None,
@@ -1237,8 +1230,10 @@ class OffsetImage(OffsetBox):
     def get_children(self):
         return [self.image]
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
         # docstring inherited
+        if renderer is None:
+            renderer = self.figure._get_renderer()
         w, h, xd, yd = self.get_extent(renderer)
         ox, oy = self.get_offset()
         return mtransforms.Bbox.from_bounds(ox - xd, oy - yd, w, h)
@@ -1278,6 +1273,7 @@ class AnnotationBbox(martist.Artist, mtext._AnnotationBase):
         return "AnnotationBbox(%g,%g)" % (self.xy[0], self.xy[1])
 
     @_docstring.dedent_interpd
+    @_api.make_keyword_only("3.6", name="xycoords")
     def __init__(self, offsetbox, xy,
                  xybox=None,
                  xycoords='data',
@@ -1407,7 +1403,7 @@ class AnnotationBbox(martist.Artist, mtext._AnnotationBase):
         If *s* is not given, reset to :rc:`legend.fontsize`.
         """
         if s is None:
-            s = rcParams["legend.fontsize"]
+            s = mpl.rcParams["legend.fontsize"]
 
         self.prop = FontProperties(size=s)
         self.stale = True
@@ -1416,12 +1412,14 @@ class AnnotationBbox(martist.Artist, mtext._AnnotationBase):
         """Return the fontsize in points."""
         return self.prop.get_size_in_points()
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
         # docstring inherited
+        if renderer is None:
+            renderer = self.figure._get_renderer()
         return Bbox.union([child.get_window_extent(renderer)
                            for child in self.get_children()])
 
-    def get_tightbbox(self, renderer):
+    def get_tightbbox(self, renderer=None):
         # docstring inherited
         return Bbox.union([child.get_tightbbox(renderer)
                            for child in self.get_children()])
@@ -1537,7 +1535,8 @@ class DraggableBase:
             self.update_offset(dx, dy)
             if self._use_blit:
                 self.canvas.restore_region(self.background)
-                self.ref_artist.draw(self.ref_artist.figure._cachedRenderer)
+                self.ref_artist.draw(
+                    self.ref_artist.figure._get_renderer())
                 self.canvas.blit()
             else:
                 self.canvas.draw()
@@ -1552,7 +1551,8 @@ class DraggableBase:
                 self.canvas.draw()
                 self.background = \
                     self.canvas.copy_from_bbox(self.ref_artist.figure.bbox)
-                self.ref_artist.draw(self.ref_artist.figure._cachedRenderer)
+                self.ref_artist.draw(
+                    self.ref_artist.figure._get_renderer())
                 self.canvas.blit()
             self._c1 = self.canvas.callbacks._connect_picklable(
                 "motion_notify_event", self.on_motion)
@@ -1602,7 +1602,7 @@ class DraggableOffsetBox(DraggableBase):
 
     def save_offset(self):
         offsetbox = self.offsetbox
-        renderer = offsetbox.figure._cachedRenderer
+        renderer = offsetbox.figure._get_renderer()
         w, h, xd, yd = offsetbox.get_extent(renderer)
         offset = offsetbox.get_offset(w, h, xd, yd, renderer)
         self.offsetbox_x, self.offsetbox_y = offset
@@ -1614,7 +1614,7 @@ class DraggableOffsetBox(DraggableBase):
 
     def get_loc_in_canvas(self):
         offsetbox = self.offsetbox
-        renderer = offsetbox.figure._cachedRenderer
+        renderer = offsetbox.figure._get_renderer()
         w, h, xd, yd = offsetbox.get_extent(renderer)
         ox, oy = offsetbox._offset
         loc_in_canvas = (ox - xd, oy - yd)

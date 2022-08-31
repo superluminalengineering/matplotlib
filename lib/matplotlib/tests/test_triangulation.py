@@ -5,7 +5,6 @@ import numpy.ma.testutils as matest
 import pytest
 
 import matplotlib as mpl
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
 from matplotlib.path import Path
@@ -273,7 +272,7 @@ def test_tripcolor_clim():
     ax = plt.figure().add_subplot()
     clim = (0.25, 0.75)
     norm = ax.tripcolor(a, b, c, clim=clim).norm
-    assert((norm.vmin, norm.vmax) == clim)
+    assert (norm.vmin, norm.vmax) == clim
 
 
 def test_tripcolor_warnings():
@@ -284,7 +283,7 @@ def test_tripcolor_warnings():
     # additional parameters
     with pytest.warns(DeprecationWarning, match="Additional positional param"):
         ax.tripcolor(x, y, C, 'unused_positional')
-    # facecolors takes precednced over C
+    # facecolors takes precedence over C
     with pytest.warns(UserWarning, match="Positional parameter C .*no effect"):
         ax.tripcolor(x, y, C, facecolors=C)
     with pytest.warns(UserWarning, match="Positional parameter C .*no effect"):
@@ -925,7 +924,7 @@ def test_tri_smooth_gradient():
     plt.triplot(triang, color='0.8')
 
     levels = np.arange(0., 1., 0.01)
-    cmap = cm.get_cmap(name='hot', lut=None)
+    cmap = mpl.colormaps['hot']
     plt.tricontour(tri_refi, z_test_refi, levels=levels, cmap=cmap,
                    linewidths=[2.0, 1.0, 1.0, 1.0])
     # Plots direction of the electrical vector field

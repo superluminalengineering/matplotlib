@@ -22,13 +22,25 @@ import sys
 import time
 import traceback
 import types
-import warnings
 import weakref
 
 import numpy as np
 
 import matplotlib
 from matplotlib import _api, _c_internal_utils
+
+
+@_api.caching_module_getattr
+class __getattr__:
+    # module-level deprecations
+    MatplotlibDeprecationWarning = _api.deprecated(
+        "3.6", obj_type="",
+        alternative="matplotlib.MatplotlibDeprecationWarning")(
+        property(lambda self: _api.deprecation.MatplotlibDeprecationWarning))
+    mplDeprecation = _api.deprecated(
+        "3.6", obj_type="",
+        alternative="matplotlib.MatplotlibDeprecationWarning")(
+        property(lambda self: _api.deprecation.MatplotlibDeprecationWarning))
 
 
 def _get_running_interactive_framework():
@@ -206,7 +218,6 @@ class CallbackRegistry:
             s: {proxy: cid for cid, proxy in d.items()}
             for s, d in self.callbacks.items()}
 
-    @_api.rename_parameter("3.4", "s", "signal")
     def connect(self, signal, func):
         """Register *func* to be called when signal *signal* is generated."""
         if signal == "units finalize":
@@ -907,6 +918,34 @@ class Grouper:
         return [x() for x in siblings]
 
 
+class GrouperView:
+    """Immutable view over a `.Grouper`."""
+
+    def __init__(self, grouper):
+        self._grouper = grouper
+
+    class _GrouperMethodForwarder:
+        def __init__(self, deprecated_kw=None):
+            self._deprecated_kw = deprecated_kw
+
+        def __set_name__(self, owner, name):
+            wrapped = getattr(Grouper, name)
+            forwarder = functools.wraps(wrapped)(
+                lambda self, *args, **kwargs: wrapped(
+                    self._grouper, *args, **kwargs))
+            if self._deprecated_kw:
+                forwarder = _api.deprecated(**self._deprecated_kw)(forwarder)
+            setattr(owner, name, forwarder)
+
+    __contains__ = _GrouperMethodForwarder()
+    __iter__ = _GrouperMethodForwarder()
+    joined = _GrouperMethodForwarder()
+    get_siblings = _GrouperMethodForwarder()
+    clean = _GrouperMethodForwarder(deprecated_kw=dict(since="3.6"))
+    join = _GrouperMethodForwarder(deprecated_kw=dict(since="3.6"))
+    remove = _GrouperMethodForwarder(deprecated_kw=dict(since="3.6"))
+
+
 def simple_linear_interpolation(a, steps):
     """
     Resample an array with ``steps - 1`` points between original point pairs.
@@ -1131,6 +1170,7 @@ def boxplot_stats(X, whis=1.5, bootstrap=None, labels=None,
         med        50th percentile
         q1         first quartile (25th percentile)
         q3         third quartile (75th percentile)
+        iqr        interquartile range
         cilo       lower notch around the median
         cihi       upper notch around the median
         whislo     end of the lower whisker
@@ -1212,11 +1252,11 @@ def boxplot_stats(X, whis=1.5, bootstrap=None, labels=None,
             stats['med'] = np.nan
             stats['q1'] = np.nan
             stats['q3'] = np.nan
+            stats['iqr'] = np.nan
             stats['cilo'] = np.nan
             stats['cihi'] = np.nan
             stats['whislo'] = np.nan
             stats['whishi'] = np.nan
-            stats['med'] = np.nan
             continue
 
         # up-convert to an array, just to be safe
@@ -1333,7 +1373,12 @@ def _check_1d(x):
     """Convert scalars to 1D arrays; pass-through arrays as is."""
     # Unpack in case of e.g. Pandas or xarray object
     x = _unpack_to_numpy(x)
-    if not hasattr(x, 'shape') or len(x.shape) < 1:
+    # plot requires `shape` and `ndim`.  If passed an
+    # object that doesn't provide them, then force to numpy array.
+    # Note this will strip unit information.
+    if (not hasattr(x, 'shape') or
+            not hasattr(x, 'ndim') or
+            len(x.shape) < 1):
         return np.atleast_1d(x)
     else:
         return x
@@ -1655,22 +1700,42 @@ def safe_first_element(obj):
     """
     Return the first element in *obj*.
 
-    This is an type-independent way of obtaining the first element, supporting
-    both index access and the iterator protocol.
+    This is an type-independent way of obtaining the first element,
+    supporting both index access and the iterator protocol.
     """
-    if isinstance(obj, collections.abc.Iterator):
-        # needed to accept `array.flat` as input.
-        # np.flatiter reports as an instance of collections.Iterator
-        # but can still be indexed via [].
-        # This has the side effect of re-setting the iterator, but
-        # that is acceptable.
-        try:
-            return obj[0]
-        except TypeError:
-            pass
-        raise RuntimeError("matplotlib does not support generators "
-                           "as input")
-    return next(iter(obj))
+    return _safe_first_non_none(obj, skip_none=False)
+
+
+def _safe_first_non_none(obj, skip_none=True):
+    """
+    Return the first non-None element in *obj*.
+    This is a method for internal use.
+
+    This is an type-independent way of obtaining the first non-None element,
+    supporting both index access and the iterator protocol.
+    The first non-None element will be obtained when skip_none is True.
+    """
+    if skip_none is False:
+        if isinstance(obj, collections.abc.Iterator):
+            # needed to accept `array.flat` as input.
+            # np.flatiter reports as an instance of collections.Iterator
+            # but can still be indexed via [].
+            # This has the side effect of re-setting the iterator, but
+            # that is acceptable.
+            try:
+                return obj[0]
+            except TypeError:
+                pass
+            raise RuntimeError("matplotlib does not support generators "
+                               "as input")
+        return next(iter(obj))
+    elif isinstance(obj, np.flatiter):
+        return obj[0]
+    elif isinstance(obj, collections.abc.Iterator):
+        raise RuntimeError("matplotlib does not "
+                           "support generators as input")
+    else:
+        return next(val for val in obj if val is not None)
 
 
 def sanitize_sequence(data):
@@ -2153,7 +2218,7 @@ def _g_sig_digits(value, delta):
     if delta == 0:
         # delta = 0 may occur when trying to format values over a tiny range;
         # in that case, replace it by the distance to the closest float.
-        delta = np.spacing(value)
+        delta = abs(np.spacing(value))
     # If e.g. value = 45.67 and delta = 0.02, then we want to round to 2 digits
     # after the decimal point (floor(log10(0.02)) = -2); 45.67 contributes 2
     # digits before the decimal point (floor(log10(45.67)) + 1 = 2): the total

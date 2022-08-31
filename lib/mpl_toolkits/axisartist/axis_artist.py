@@ -75,7 +75,8 @@ from operator import methodcaller
 
 import numpy as np
 
-from matplotlib import _api, cbook, rcParams
+import matplotlib as mpl
+from matplotlib import _api, cbook
 import matplotlib.artist as martist
 import matplotlib.colors as mcolors
 import matplotlib.text as mtext
@@ -250,7 +251,10 @@ class LabelBase(mtext.Text):
         self.set_transform(tr)
         self.set_rotation(angle_orig)
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
+        if renderer is None:
+            renderer = self.figure._get_renderer()
+
         # save original and adjust some properties
         tr = self.get_transform()
         angle_orig = self.get_rotation()
@@ -361,7 +365,9 @@ class AxisLabel(AttributeCopier, LabelBase):
 
         super().draw(renderer)
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
+        if renderer is None:
+            renderer = self.figure._get_renderer()
         if not self.get_visible():
             return
 
@@ -513,7 +519,9 @@ class TickLabels(AxisLabel):  # mtext.Text
     def set_locs_angles_labels(self, locs_angles_labels):
         self._locs_angles_labels = locs_angles_labels
 
-    def get_window_extents(self, renderer):
+    def get_window_extents(self, renderer=None):
+        if renderer is None:
+            renderer = self.figure._get_renderer()
 
         if not self.get_visible():
             self._axislabel_pad = self._external_pad
@@ -774,11 +782,11 @@ class AxisArtist(martist.Artist):
         if axisline_style is None:
             self.line = PathPatch(
                 self._axis_artist_helper.get_line(self.axes),
-                color=rcParams['axes.edgecolor'],
+                color=mpl.rcParams['axes.edgecolor'],
                 fill=False,
-                linewidth=rcParams['axes.linewidth'],
-                capstyle=rcParams['lines.solid_capstyle'],
-                joinstyle=rcParams['lines.solid_joinstyle'],
+                linewidth=mpl.rcParams['axes.linewidth'],
+                capstyle=mpl.rcParams['lines.solid_capstyle'],
+                joinstyle=mpl.rcParams['lines.solid_joinstyle'],
                 transform=tran)
         else:
             self.line = axisline_style(self, transform=tran)
@@ -797,14 +805,16 @@ class AxisArtist(martist.Artist):
 
         self.major_ticks = Ticks(
             kwargs.get(
-                "major_tick_size", rcParams[f"{axis_name}tick.major.size"]),
+                "major_tick_size",
+                mpl.rcParams[f"{axis_name}tick.major.size"]),
             axis=self.axis, transform=trans)
         self.minor_ticks = Ticks(
             kwargs.get(
-                "minor_tick_size", rcParams[f"{axis_name}tick.minor.size"]),
+                "minor_tick_size",
+                mpl.rcParams[f"{axis_name}tick.minor.size"]),
             axis=self.axis, transform=trans)
 
-        size = rcParams[f"{axis_name}tick.labelsize"]
+        size = mpl.rcParams[f"{axis_name}tick.labelsize"]
         self.major_ticklabels = TickLabels(
             axis=self.axis,
             axis_direction=self._axis_direction,
@@ -812,7 +822,7 @@ class AxisArtist(martist.Artist):
             transform=trans,
             fontsize=size,
             pad=kwargs.get(
-                "major_tick_pad", rcParams[f"{axis_name}tick.major.pad"]),
+                "major_tick_pad", mpl.rcParams[f"{axis_name}tick.major.pad"]),
         )
         self.minor_ticklabels = TickLabels(
             axis=self.axis,
@@ -821,7 +831,7 @@ class AxisArtist(martist.Artist):
             transform=trans,
             fontsize=size,
             pad=kwargs.get(
-                "minor_tick_pad", rcParams[f"{axis_name}tick.minor.pad"]),
+                "minor_tick_pad", mpl.rcParams[f"{axis_name}tick.minor.pad"]),
         )
 
     def _get_tick_info(self, tick_iter):
@@ -846,9 +856,12 @@ class AxisArtist(martist.Artist):
 
         return ticks_loc_angle, ticklabels_loc_angle_label
 
-    def _update_ticks(self, renderer):
+    def _update_ticks(self, renderer=None):
         # set extra pad for major and minor ticklabels: use ticksize of
         # majorticks even for minor ticks. not clear what is best.
+
+        if renderer is None:
+            renderer = self.figure._get_renderer()
 
         dpi_cor = renderer.points_to_pixels(1.)
         if self.major_ticks.get_visible() and self.major_ticks.get_tick_out():
@@ -893,7 +906,7 @@ class AxisArtist(martist.Artist):
             "",
             xy=(x, y), xycoords="axes fraction",
             xytext=(0, 0), textcoords="offset points",
-            color=rcParams['xtick.color'],
+            color=mpl.rcParams['xtick.color'],
             horizontalalignment=ha, verticalalignment=va,
         )
         self.offsetText.set_transform(IdentityTransform())
@@ -917,8 +930,8 @@ class AxisArtist(martist.Artist):
         self.label = AxisLabel(
             0, 0, "__from_axes__",
             color="auto",
-            fontsize=kwargs.get("labelsize", rcParams['axes.labelsize']),
-            fontweight=rcParams['axes.labelweight'],
+            fontsize=kwargs.get("labelsize", mpl.rcParams['axes.labelsize']),
+            fontweight=mpl.rcParams['axes.labelweight'],
             axis=self.axis,
             transform=tr,
             axis_direction=self._axis_direction,
@@ -963,7 +976,7 @@ class AxisArtist(martist.Artist):
     def set_label(self, s):
         self.label.set_text(s)
 
-    def get_tightbbox(self, renderer):
+    def get_tightbbox(self, renderer=None):
         if not self.get_visible():
             return
         self._axis_artist_helper.update_lim(self.axes)

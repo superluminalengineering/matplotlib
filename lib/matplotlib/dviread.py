@@ -356,7 +356,6 @@ class Dvi:
         while True:
             byte = self.file.read(1)[0]
             self._dtable[byte](self, byte)
-            name = self._dtable[byte].__name__
             if byte == 140:                         # end of page
                 return True
             if self.state is _dvistate.post_post:   # end of file
@@ -1148,6 +1147,6 @@ if __name__ == '__main__':
                           else ".",
                           text.width, sep="\t")
             if page.boxes:
-                print("x", "y", "w", "h", "", "(boxes)", sep="\t")
-                for x, y, w, h in page.boxes:
-                    print(x, y, w, h, sep="\t")
+                print("x", "y", "h", "w", "", "(boxes)", sep="\t")
+                for box in page.boxes:
+                    print(box.x, box.y, box.height, box.width, sep="\t")

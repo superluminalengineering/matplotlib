@@ -75,6 +75,7 @@ class Collection(artist.Artist, cm.ScalarMappable):
     _edge_default = False
 
     @_docstring.interpd
+    @_api.make_keyword_only("3.6", name="edgecolors")
     def __init__(self,
                  edgecolors=None,
                  facecolors=None,
@@ -130,13 +131,9 @@ class Collection(artist.Artist, cm.ScalarMappable):
         offset_transform : `~.Transform`, default: `.IdentityTransform`
             A single transform which will be applied to each *offsets* vector
             before it is used.
-        norm : `~.colors.Normalize`, optional
-            Forwarded to `.ScalarMappable`. The default of
-            ``None`` means that the first draw call will set ``vmin`` and
-            ``vmax`` using the minimum and maximum values of the data.
-        cmap : `~.colors.Colormap`, optional
-            Forwarded to `.ScalarMappable`. The default of
-            ``None`` will result in :rc:`image.cmap` being used.
+        cmap, norm
+            Data normalization and colormapping parameters. See
+            `.ScalarMappable` for a detailed description.
         hatch : str, optional
             Hatching pattern to use in filled paths, if any. Valid strings are
             ['/', '\\', '|', '-', '+', 'x', 'o', 'O', '.', '*']. See
@@ -197,8 +194,8 @@ class Collection(artist.Artist, cm.ScalarMappable):
             # Broadcast (2,) -> (1, 2) but nothing else.
             if offsets.shape == (2,):
                 offsets = offsets[None, :]
-        self._offsets = offsets
 
+        self._offsets = offsets
         self._offset_transform = offset_transform
 
         self._path_effects = None
@@ -208,7 +205,7 @@ class Collection(artist.Artist, cm.ScalarMappable):
     def get_paths(self):
         return self._paths
 
-    def set_paths(self):
+    def set_paths(self, paths):
         raise NotImplementedError
 
     def get_transforms(self):
@@ -303,7 +300,7 @@ class Collection(artist.Artist, cm.ScalarMappable):
                 return bbox
         return transforms.Bbox.null()
 
-    def get_window_extent(self, renderer):
+    def get_window_extent(self, renderer=None):
         # TODO: check to ensure that this does not fail for
         # cases other than scatter plot legend
         return self.get_datalim(transforms.IdentityTransform())
@@ -422,16 +419,17 @@ class Collection(artist.Artist, cm.ScalarMappable):
         renderer.close_group(self.__class__.__name__)
         self.stale = False
 
-    def set_pickradius(self, pr):
+    @_api.rename_parameter("3.6", "pr", "pickradius")
+    def set_pickradius(self, pickradius):
         """
         Set the pick radius used for containment tests.
 
         Parameters
         ----------
-        pr : float
+        pickradius : float
             Pick radius, in points.
         """
-        self._pickradius = pr
+        self._pickradius = pickradius
 
     def get_pickradius(self):
         return self._pickradius
@@ -1151,6 +1149,8 @@ class PathCollection(_CollectionWithSizes):
 
 
 class PolyCollection(_CollectionWithSizes):
+
+    @_api.make_keyword_only("3.6", name="closed")
     def __init__(self, verts, sizes=None, closed=True, **kwargs):
         """
         Parameters
@@ -1214,11 +1214,7 @@ class PolyCollection(_CollectionWithSizes):
         self._paths = []
         for xy in verts:
             if len(xy):
-                if isinstance(xy, np.ma.MaskedArray):
-                    xy = np.ma.concatenate([xy, xy[:1]])
-                else:
-                    xy = np.concatenate([xy, xy[:1]])
-                self._paths.append(mpath.Path(xy, closed=True))
+                self._paths.append(mpath.Path._create_closed(xy))
             else:
                 self._paths.append(mpath.Path(xy))
 
@@ -1229,12 +1225,8 @@ class PolyCollection(_CollectionWithSizes):
         if len(verts) != len(codes):
             raise ValueError("'codes' must be a 1D list or array "
                              "with the same length of 'verts'")
-        self._paths = []
-        for xy, cds in zip(verts, codes):
-            if len(xy):
-                self._paths.append(mpath.Path(xy, cds))
-            else:
-                self._paths.append(mpath.Path(xy))
+        self._paths = [mpath.Path(xy, cds) if len(xy) else mpath.Path(xy)
+                       for xy, cds in zip(verts, codes)]
         self.stale = True
 
 
@@ -1287,6 +1279,7 @@ class RegularPolyCollection(_CollectionWithSizes):
     _path_generator = mpath.Path.unit_regular_polygon
     _factor = np.pi ** (-1/2)
 
+    @_api.make_keyword_only("3.6", name="rotation")
     def __init__(self,
                  numsides,
                  rotation=0,
@@ -1377,7 +1370,7 @@ class LineCollection(Collection):
     _edge_default = True
 
     def __init__(self, segments,  # Can be None.
-                 *args,           # Deprecated.
+                 *,
                  zorder=2,        # Collection.zorder is 1
                  **kwargs
                  ):
@@ -1413,18 +1406,6 @@ class LineCollection(Collection):
         **kwargs
             Forwarded to `.Collection`.
         """
-        argnames = ["linewidths", "colors", "antialiaseds", "linestyles",
-                    "offsets", "transOffset", "norm", "cmap", "pickradius",
-                    "zorder", "facecolors"]
-        if args:
-            argkw = {name: val for name, val in zip(argnames, args)}
-            kwargs.update(argkw)
-            _api.warn_deprecated(
-                "3.4", message="Since %(since)s, passing LineCollection "
-                "arguments other than the first, 'segments', as positional "
-                "arguments is deprecated, and they will become keyword-only "
-                "arguments %(removal)s."
-                )
         # Unfortunately, mplot3d needs this explicit setting of 'facecolors'.
         kwargs.setdefault('facecolors', 'none')
         super().__init__(
@@ -1435,14 +1416,10 @@ class LineCollection(Collection):
     def set_segments(self, segments):
         if segments is None:
             return
-        _segments = []
 
-        for seg in segments:
-            if not isinstance(seg, np.ma.MaskedArray):
-                seg = np.asarray(seg, float)
-            _segments.append(seg)
-
-        self._paths = [mpath.Path(_seg) for _seg in _segments]
+        self._paths = [mpath.Path(seg) if isinstance(seg, np.ma.MaskedArray)
+                       else mpath.Path(np.asarray(seg, float))
+                       for seg in segments]
         self.stale = True
 
     set_verts = set_segments  # for compatibility with PolyCollection
@@ -1515,6 +1492,7 @@ class EventCollection(LineCollection):
 
     _edge_default = True
 
+    @_api.make_keyword_only("3.6", name="lineoffset")
     def __init__(self,
                  positions,  # Cannot be None.
                  orientation='horizontal',
@@ -1710,6 +1688,7 @@ class CircleCollection(_CollectionWithSizes):
 class EllipseCollection(Collection):
     """A collection of ellipses, drawn using splines."""
 
+    @_api.make_keyword_only("3.6", name="units")
     def __init__(self, widths, heights, angles, units='points', **kwargs):
         """
         Parameters
@@ -1792,29 +1771,35 @@ class PatchCollection(Collection):
     """
     A generic collection of patches.
 
-    This makes it easier to assign a colormap to a heterogeneous
+    PatchCollection draws faster than a large number of equivalent individual
+    Patches. It also makes it easier to assign a colormap to a heterogeneous
     collection of patches.
-
-    This also may improve plotting speed, since PatchCollection will
-    draw faster than a large number of patches.
     """
 
+    @_api.make_keyword_only("3.6", name="match_original")
     def __init__(self, patches, match_original=False, **kwargs):
         """
-        *patches*
-            a sequence of Patch objects.  This list may include
+        Parameters
+        ----------
+        patches : list of `.Patch`
+            A sequence of Patch objects.  This list may include
             a heterogeneous assortment of different patch types.
 
-        *match_original*
+        match_original : bool, default: False
             If True, use the colors and linewidths of the original
             patches.  If False, new colors may be assigned by
             providing the standard collection arguments, facecolor,
             edgecolor, linewidths, norm or cmap.
 
-        If any of *edgecolors*, *facecolors*, *linewidths*, *antialiaseds* are
-        None, they default to their `.rcParams` patch setting, in sequence
-        form.
+        **kwargs
+            All other parameters are forwarded to `.Collection`.
 
+            If any of *edgecolors*, *facecolors*, *linewidths*, *antialiaseds*
+            are None, they default to their `.rcParams` patch setting, in
+            sequence form.
+
+        Notes
+        -----
         The use of `~matplotlib.cm.ScalarMappable` functionality is optional.
         If the `~matplotlib.cm.ScalarMappable` matrix ``_A`` has been set (via
         a call to `~.ScalarMappable.set_array`), at draw time a call to scalar
@@ -2197,12 +2182,6 @@ class QuadMesh(Collection):
 
     def get_cursor_data(self, event):
         contained, info = self.contains(event)
-        if len(info["ind"]) == 1:
-            ind, = info["ind"]
-            array = self.get_array()
-            if array is not None:
-                return array[ind]
-            else:
-                return None
-        else:
-            return None
+        if contained and self.get_array() is not None:
+            return self.get_array().ravel()[info["ind"]]
+        return None
