@@ -1,154 +1,130 @@
 .. _github-stats:
 
-GitHub statistics (Dec 11, 2021)
-================================
+GitHub statistics for 3.5.3 (Aug 10, 2022)
+==========================================
 
-GitHub statistics for 2021/11/16 (tag: v3.5.0) - 2021/12/11
+GitHub statistics for 2022/05/03 (tag: v3.5.2) - 2022/08/10
 
 These lists are automatically generated, and may be incomplete or contain duplicates.
 
-We closed 29 issues and merged 84 pull requests.
-The full list can be seen `on GitHub <https://github.com/matplotlib/matplotlib/milestone/67?closed=1>`__
+We closed 19 issues and merged 66 pull requests.
+The full list can be seen `on GitHub <https://github.com/matplotlib/matplotlib/milestone/71?closed=1>`__
 
-The following 17 authors contributed 123 commits.
+The following 20 authors contributed 99 commits.
 
 * Antony Lee
-* Constantine Evans
-* David Stansby
+* Biswapriyo Nath
+* David Gilbertson
+* DWesl
 * Elliott Sales de Andrade
-* franzhaas
+* GavinZhang
 * Greg Lucas
-* Hansin Ahuja
-* Hood Chatham
-* Jake Lishman
 * Jody Klymak
-* Matthias Bussonnier
-* Ryan May
-* Steffen Rehberg
-* Sven Eschlbeck
-* sveneschlbeck
+* Kayran Schmidt
+* Matthew Feickert
+* Nickolaos Giannatos
+* Oscar Gustafsson
+* Ruth Comer
+* SaumyaBhushan
+* Scott Jones
+* Scott Shambaugh
+* tfpf
 * Thomas A Caswell
 * Tim Hoffmann
+* wsykala
 
 GitHub issues and pull requests:
 
-Pull Requests (84):
+Pull Requests (66):
 
-* :ghpull:`21926`: Backport PR #21913 on branch v3.5.x (Make colorbar boundaries work again)
-* :ghpull:`21924`: Backport PR #21861 on branch v3.5.x (DOC: Small formatting improvement to set_markevery)
-* :ghpull:`21913`: Make colorbar boundaries work again
-* :ghpull:`21922`: Backport PR #21753 on branch v3.5.x (DOC: update anatomy of figure)
-* :ghpull:`21861`: DOC: Small formatting improvement to set_markevery
-* :ghpull:`21919`: Fix use_data_coordinates docstring
-* :ghpull:`21912`: Backport PR #21900 on branch v3.5.x (Include test notebooks in test package)
-* :ghpull:`21900`: Include test notebooks in test package
-* :ghpull:`21908`: Backport PR #21834 on branch v3.5.x (MAINT Fix signature qhull version function )
-* :ghpull:`21907`: Backport PR #21905 on branch v3.5.x (Fix image testing decorator in pytest importlib mode)
-* :ghpull:`21906`: Backport PR #21773 on branch v3.5.x (FIX: Reset label of axis to center)
-* :ghpull:`21834`: MAINT Fix signature qhull version function
-* :ghpull:`21905`: Fix image testing decorator in pytest importlib mode
-* :ghpull:`21773`: FIX: Reset label of axis to center
-* :ghpull:`21902`: Backport PR #21884 on branch v3.5.x (FIX: be more careful about coercing unit-full containers to ndarray)
-* :ghpull:`21884`: FIX: be more careful about coercing unit-full containers to ndarray
-* :ghpull:`21899`: Backport PR #21859 on branch v3.5.x (Fix streamline plotting from upper edges of grid)
-* :ghpull:`21859`: Fix streamline plotting from upper edges of grid
-* :ghpull:`21896`: Backport PR #21890 on branch v3.5.x (Drop retina images when building PDF docs)
-* :ghpull:`21891`: Backport PR #21887 on branch v3.5.x (Make figure target links relative)
-* :ghpull:`21883`: Backport PR #21872 on branch v3.5.x (FIX: colorbars with NoNorm)
-* :ghpull:`21872`: FIX: colorbars with NoNorm
-* :ghpull:`21869`: Backport PR #21866 on branch v3.5.x (Shorten some inset_locator docstrings.)
-* :ghpull:`21866`: Shorten some inset_locator docstrings.
-* :ghpull:`21865`: Backport PR #21864 on branch v3.5.x (Delete "Load converter" example)
-* :ghpull:`21864`: Delete "Load converter" example
-* :ghpull:`21857`: Backport PR #21837 on branch v3.5.x (Display example figures in a single column)
-* :ghpull:`21856`: Backport PR #21853 on branch v3.5.x (DOC: Fix Annotation arrow style reference example)
-* :ghpull:`21853`: DOC: Fix Annotation arrow style reference example
-* :ghpull:`21852`: Backport PR #21818 on branch v3.5.x (Fix collections coerce float)
-* :ghpull:`21818`: Fix collections coerce float
-* :ghpull:`21849`: Backport PR #21845 on branch v3.5.x (FIX: bbox subfigures)
-* :ghpull:`21845`: FIX: bbox subfigures
-* :ghpull:`21832`: Backport PR #21820 on branch v3.5.x (Drop setuptools-scm requirement in wheels)
-* :ghpull:`21820`: Drop setuptools-scm requirement in wheels
-* :ghpull:`21829`: Backport PR #21823 on branch v3.5.x (DOC: Misc rst syntax fixes)
-* :ghpull:`21823`: DOC: Misc rst syntax fixes
-* :ghpull:`21826`: Backport PR #21800 on branch v3.5.x (DOC: Update Basic Usage tutorial)
-* :ghpull:`21814`: Manual backport of #21794
-* :ghpull:`21812`: Backport #21641
-* :ghpull:`21810`: Backport PR #21743 on branch v3.5.x (Clarify Annotation arrowprops docs)
-* :ghpull:`21808`: Backport PR #21785 on branch v3.5.x (Fix ConciseDateFormatter offset during zoom)
-* :ghpull:`21807`: Backport PR #21791 on branch v3.5.x (Refix check for manager presence in deprecated blocking_input.)
-* :ghpull:`21806`: Backport PR #21663 on branch v3.5.x (Use standard subplot window in macosx backend)
-* :ghpull:`21785`: Fix ConciseDateFormatter offset during zoom
-* :ghpull:`21804`: Backport PR #21659 on branch v3.5.x (Fix PDF contents)
-* :ghpull:`21791`: Refix check for manager presence in deprecated blocking_input.
-* :ghpull:`21793`: Backport PR #21787 on branch v3.5.x (Fixes row/column mixup in GridSpec height_ratios documentation.)
-* :ghpull:`21787`: Fixes row/column mixup in GridSpec height_ratios documentation.
-* :ghpull:`21778`: Backport PR #21705 on branch v3.5.x (MNT: make print_figure kwarg wrapper support py311)
-* :ghpull:`21779`: Backport PR #21751 on branch v3.5.x (FIX: manual colorbars and tight layout)
-* :ghpull:`21777`: Backport PR #21758 on branch v3.5.x (FIX: Make sure a renderer gets attached to figure after draw)
-* :ghpull:`21751`: FIX: manual colorbars and tight layout
-* :ghpull:`21705`: MNT: make print_figure kwarg wrapper support py311
-* :ghpull:`21758`: FIX: Make sure a renderer gets attached to figure after draw
-* :ghpull:`21775`: Backport PR #21771 on branch v3.5.x (DOC: fix missing ref)
-* :ghpull:`21770`: Backport of PR #21631 on v3.5.x
-* :ghpull:`21765`: Backport PR #21741 on branch v3.5.x (Reduce do_3d_projection deprecation warnings in external artists)
-* :ghpull:`21764`: Backport PR #21762 on branch v3.5.x (FIX: align_x/ylabels)
-* :ghpull:`21741`: Reduce do_3d_projection deprecation warnings in external artists
-* :ghpull:`21762`: FIX: align_x/ylabels
-* :ghpull:`21759`: Backport PR #21757 on branch v3.5.x (Fix doc typo.)
-* :ghpull:`21704`: FIX: deprecation of render keyword to do_3d_projection
-* :ghpull:`21730`: Backport PR #21727 on branch v3.5.x (Doc fix colormap inaccuracy)
-* :ghpull:`21663`: Use standard subplot window in macosx backend
-* :ghpull:`21725`: Backport PR #21681 on branch v3.5.x (Bind subplot_tool more closely to target figure.)
-* :ghpull:`21665`: Include test notebooks in test package
-* :ghpull:`21721`: Backport PR #21720 on branch v3.5.x (Fix compiler configuration priority for FreeType build)
-* :ghpull:`21720`: Fix compiler configuration priority for FreeType build
-* :ghpull:`21715`: Backport PR #21714 on branch v3.5.x (DOC: note renaming of config.cfg.template to mplconfig.cfg.template)
-* :ghpull:`21706`: Backport PR #21703 on branch v3.5.x (Changed the link to the correct citing example)
-* :ghpull:`21691`: Backport PR #21686 on branch v3.5.x (FIX: colorbar for horizontal contours)
-* :ghpull:`21689`: Backport PR #21676 on branch v3.5.x (Fix boundary norm negative)
-* :ghpull:`21686`: FIX: colorbar for horizontal contours
-* :ghpull:`21681`: Bind subplot_tool more closely to target figure.
-* :ghpull:`21676`: Fix boundary norm negative
-* :ghpull:`21685`: Backport PR #21658 on branch v3.5.x (Validate that input to Poly3DCollection is a list of 2D array-like)
-* :ghpull:`21684`: Backport PR #21662 on branch v3.5.x (FIX: put newline in matplotlibrc when setting default backend)
-* :ghpull:`21658`: Validate that input to Poly3DCollection is a list of 2D array-like
-* :ghpull:`21662`: FIX: put newline in matplotlibrc when setting default backend
-* :ghpull:`21651`: Backport PR #21626 on branch v3.5.x (Added the definition of Deprecation and made Deprecation Process clearer)
-* :ghpull:`21626`: Added the definition of Deprecation and made Deprecation Process clearer
-* :ghpull:`21137`: Small cleanups to colorbar.
+* :ghpull:`23591`: Backport PR #23549 on branch v3.5.x (Don't clip colorbar dividers)
+* :ghpull:`23593`: STY: Fix whitespace error from new flake8
+* :ghpull:`23549`: Don't clip colorbar dividers
+* :ghpull:`23528`: Backport PR #23523 on branch v3.5.x (TST: Update Quantity test class)
+* :ghpull:`23523`: TST: Update Quantity test class
+* :ghpull:`23508`: Add explicit registration of units in examples
+* :ghpull:`23515`: Backport PR #23462: Fix AttributeError for pickle load of Figure class
+* :ghpull:`23518`: Backport PR #23514 on branch v3.5.x (Fix doc build)
+* :ghpull:`23517`: Backport PR #23511 on branch v3.5.x (supporting IBM i OS)
+* :ghpull:`23511`: supporting IBM i OS
+* :ghpull:`23462`: Fix AttributeError for pickle load of Figure class
+* :ghpull:`23488`: Backport PR #23066 on branch v3.5.x (BLD: Define PyErr_SetFromWindowsErr on Cygwin.)
+* :ghpull:`23066`: BLD: Define PyErr_SetFromWindowsErr on Cygwin.
+* :ghpull:`23479`: Pin setuptools_scm on v3.5.x
+* :ghpull:`22998`: Backport PR #22987 on branch v3.5.x (CI: bump test limit from tkagg on osx)
+* :ghpull:`23478`: Backport PR #23476: FIX: reset to original DPI in getstate
+* :ghpull:`23476`: FIX: reset to original DPI in getstate
+* :ghpull:`23458`: Backport PR #23445 on branch v3.5.x (Compare thread native ids when checking whether running on main thread.)
+* :ghpull:`23440`: Backport PR #23430 on branch v3.5.x (Fix divide by 0 runtime warning)
+* :ghpull:`23430`: Fix divide by 0 runtime warning
+* :ghpull:`23344`: Backport PR #23333: Fix errorbar handling of nan.
+* :ghpull:`23333`: Fix errorbar handling of nan.
+* :ghpull:`23338`: Backport PR #23278: Remove internal use of get/set dpi
+* :ghpull:`23331`: Backport PR #22835 on branch v3.5.x (Fix BoundaryNorm cursor data output)
+* :ghpull:`22835`: Fix BoundaryNorm cursor data output
+* :ghpull:`23292`: Backport PR #23232 on branch v3.5.x (Fix passing stem markerfmt positionally when locs are not given)
+* :ghpull:`23275`: Backport PR #23260 on branch v3.5.x (Fix Colorbar extend patches to have correct alpha)
+* :ghpull:`23312`: Pin to an older pydata-sphinx-theme for v3.5.x
+* :ghpull:`23278`: Remove internal use of get/set dpi
+* :ghpull:`23232`: Fix passing stem markerfmt positionally when locs are not given
+* :ghpull:`22865`: Fix issue with colorbar extend and drawedges
+* :ghpull:`23260`: Fix Colorbar extend patches to have correct alpha
+* :ghpull:`23245`: Backport PR #23144 on branch v3.5.x (Only import setuptools_scm when we are in a matplotlib git repo)
+* :ghpull:`23144`: Only import setuptools_scm when we are in a matplotlib git repo
+* :ghpull:`23242`: Backport PR #23203 on branch v3.5.x (Honour ``panchor`` keyword for colorbar on subplot)
+* :ghpull:`23203`: Honour ``panchor`` keyword for colorbar on subplot
+* :ghpull:`23228`: Backport PR #23209 on branch v3.5.x (Fix the vertical alignment of overunder symbols.)
+* :ghpull:`23209`: Fix the vertical alignment of overunder symbols.
+* :ghpull:`23184`: Backport PR #23174: Make sure SubFigure has _cachedRenderer
+* :ghpull:`23194`: Backport PR #23095: Try to unbreak CI by xfailing OSX Tk tests
+* :ghpull:`23113`: Backport PR #23057 and #23106
+* :ghpull:`23185`: Backport PR #23168 on branch v3.5.x (Corrected docstring for artist.Artist.set_agg_filter)
+* :ghpull:`23168`: Corrected docstring for artist.Artist.set_agg_filter
+* :ghpull:`23174`: Make sure SubFigure has _cachedRenderer
+* :ghpull:`23110`: Tweak subprocess_run_helper.
+* :ghpull:`23138`: Backport PR #23137 on branch v3.5.x (DOC fix typo)
+* :ghpull:`23137`: DOC fix typo
+* :ghpull:`23125`: Backport PR #23122 on branch v3.5.x (Remove redundant rcparam default)
+* :ghpull:`23120`: Backport PR #23115 on branch v3.5.x (DOC fixed duplicate/wrong default)
+* :ghpull:`23095`: Try to unbreak CI by xfailing OSX Tk tests
+* :ghpull:`23106`: Reuse subprocess_run_helper in test_pylab_integration.
+* :ghpull:`23112`: Backport PR #23111 on branch v3.5.x (Fix _g_sig_digits for value<0 and delta=0.)
+* :ghpull:`23111`: Fix _g_sig_digits for value<0 and delta=0.
+* :ghpull:`23057`: FIX: ensure switching the backend installs repl hook
+* :ghpull:`23075`: Backport PR #23069 on branch v3.5.x (TST: forgive more failures on pyside2 / pyside6 cross imports)
+* :ghpull:`23069`: TST: forgive more failures on pyside2 / pyside6 cross imports
+* :ghpull:`22981`: Backport PR #22979 on branch v3.5.x (Skip additional backend tests on import error)
+* :ghpull:`23064`: Backport PR #22975 on branch v3.5.x (MNT: fix __array__ to numpy)
+* :ghpull:`22975`: MNT: fix __array__ to numpy
+* :ghpull:`23058`: Backport PR #23051 on branch v3.5.x (Fix variable initialization due to jump bypassing it)
+* :ghpull:`23051`: Fix variable initialization due to jump bypassing it
+* :ghpull:`23010`: Backport PR #23000 on branch v3.5.x (Additional details on VS install on installation page)
+* :ghpull:`22995`: Backport PR #22994 on branch v3.5.x (Docs: ignore >>> on code prompts on documentation prompts)
+* :ghpull:`23001`: CI: Add trivial pre-commit.ci config to avoid CI failure
+* :ghpull:`22987`: CI: bump test limit from tkagg on osx
+* :ghpull:`22979`: Skip additional backend tests on import error
 
-Issues (29):
+Issues (19):
 
-* :ghissue:`21909`: [Bug]: Matplotlib is unable to apply the boundaries in the colorbar after updating to 3.5.0
-* :ghissue:`21654`: [Bug]: test_nbagg_01.ipynb not installed
-* :ghissue:`21885`: [Bug]: test decorator breaks with new pytest importlib mode
-* :ghissue:`21772`: [Bug]: cannot reset label of axis to center
-* :ghissue:`21669`: [Bug]: Matplotlib 3.5 breaks unyt integration of error bars
-* :ghissue:`21649`: [Bug]: Startpoints in streamplot fail on right and upper edges
-* :ghissue:`21870`: [Bug]: Colormap + NoNorm only plots one color under ``matplotlib`` 3.5.0
-* :ghissue:`21882`: [Bug]: Colorbar does not work for negative values with contour/contourf
-* :ghissue:`21803`: [Bug]: using ``set_offsets`` on scatter object raises TypeError
-* :ghissue:`21839`: [Bug]: Top of plot clipped when using Subfigures without suptitle
-* :ghissue:`21841`: [Bug]: Wrong tick labels and colorbar of discrete normalizer
-* :ghissue:`21783`: [MNT]: wheel of 3.5.0 apears to depend on setuptools-scm which apears to be unintentional
-* :ghissue:`21733`: [Bug]: Possible bug on arrows in annotation
-* :ghissue:`21749`: [Bug]: Regression on ``tight_layout`` when manually adding axes for colorbars
-* :ghissue:`19197`: Unexpected error after using Figure.canvas.draw on macosx backend
-* :ghissue:`13968`: ``ax.get_xaxis().get_minorticklabels()`` always returns list of empty strings
-* :ghissue:`7550`: Draw not caching with macosx backend
-* :ghissue:`21740`: [Bug]: unavoidable ``DeprecationWarning`` when using ``Patch3D``
-* :ghissue:`15884`: DOC: Error in colormap manipulation tutorial
-* :ghissue:`21648`: [Bug]: subplot parameter window appearing 1/4 size on macosx
-* :ghissue:`21702`: [Doc]: Wrong link to the ready-made citation entry
-* :ghissue:`21683`: [Bug]: add_lines broken for horizontal colorbars
-* :ghissue:`21680`: [MNT]: macosx subplot parameters multiple windows
-* :ghissue:`21679`: [MNT]: Close subplot_parameters window when main figure closes
-* :ghissue:`21671`: [Bug]: 3.5.0 colorbar ValueError: minvalue must be less than or equal to maxvalue
-* :ghissue:`21652`: [Bug]: ax.add_collection3d throws warning Mean of empty slice
-* :ghissue:`21660`: [Bug]: mplsetup.cfg parsing issue
-* :ghissue:`21668`: [Bug]: New plot directive error in 3.5.0
-* :ghissue:`21393`: [Doc]: describe deprecation process more explicitly
+* :ghissue:`22864`: [Bug]: Colorbar with drawedges=True and extend='both' does not draw edges at extremities
+* :ghissue:`23382`: [TST] Upcoming dependency test failures
+* :ghissue:`23470`: [Bug]: fig.canvas.mpl_connect in 3.5.2 not registering events in jupyter lab unless using widget pan or zoom controls
+* :ghissue:`22997`: [Bug]: Cygwin build fails due to use of Windows-only functions in _tkagg.cpp
+* :ghissue:`23471`: [Bug]: DPI of a figure is doubled after unpickling on M1 Mac
+* :ghissue:`23050`: [Doc]: Docstring for artist.Artist.set_agg_filter is incorrect
+* :ghissue:`23307`: [Bug]: PEX warns about missing ``setuptools`` from ``install_requires`` in matplotlib
+* :ghissue:`23330`: [Bug]: Missing values cause exception in errorbar plot
+* :ghissue:`21915`: [Bug]: scalar mappable format_cursor_data crashes on BoundarNorm
+* :ghissue:`22970`: [Bug]: Colorbar extend patches do not have correct alpha
+* :ghissue:`23114`: [Bug]: matplotlib __init__.py checks for .git folder 2 levels up, then errors due to setup tools_scm
+* :ghissue:`23157`: [Bug]: colorbar ignores keyword panchor=False
+* :ghissue:`23229`: [Bug]: matplotlib==3.5.2 breaks ipywidgets
+* :ghissue:`18085`: vertical alignment of \sum depends on the presence of subscripts and superscripts
+* :ghissue:`23173`: [Bug]: Crash when adding clabels to subfigures
+* :ghissue:`23108`: [Bug]: Imshow with all negative values leads to math domain errors.
+* :ghissue:`23042`: [Bug]: Figures fail to redraw with IPython
+* :ghissue:`23004`: [Bug]: test failure of test_cross_Qt_imports in 3.5.2
+* :ghissue:`22973`: [Bug]: v3.5.2 causing plot to crash when plotting object with ``__array__`` method
 
 
 Previous GitHub statistics

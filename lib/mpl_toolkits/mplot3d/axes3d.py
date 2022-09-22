@@ -14,11 +14,11 @@ from collections import defaultdict
 import functools
 import itertools
 import math
-from numbers import Integral
 import textwrap
 
 import numpy as np
 
+import matplotlib as mpl
 from matplotlib import _api, cbook, _docstring, _preprocess_data
 import matplotlib.artist as martist
 import matplotlib.axes as maxes
@@ -27,10 +27,9 @@ import matplotlib.colors as mcolors
 import matplotlib.image as mimage
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
-import matplotlib.scale as mscale
 import matplotlib.container as mcontainer
 import matplotlib.transforms as mtransforms
-from matplotlib.axes import Axes, rcParams
+from matplotlib.axes import Axes
 from matplotlib.axes._base import _axis_method_wrapper, _process_plot_format
 from matplotlib.transforms import Bbox
 from matplotlib.tri.triangulation import Triangulation
@@ -64,7 +63,7 @@ class Axes3D(Axes):
         ----------
         fig : Figure
             The parent figure.
-        rect : (float, float, float, float)
+        rect : tuple (left, bottom, width, height), default: None.
             The ``(left, bottom, width, height)`` axes position.
         elev : float, default: 30
             The elevation angle in degrees rotates the camera above and below
@@ -226,11 +225,11 @@ class Axes3D(Axes):
     get_zgridlines = _axis_method_wrapper("zaxis", "get_gridlines")
     get_zticklines = _axis_method_wrapper("zaxis", "get_ticklines")
 
-    w_xaxis = _api.deprecated("3.1", alternative="xaxis", pending=True)(
+    w_xaxis = _api.deprecated("3.1", alternative="xaxis", removal="3.8")(
         property(lambda self: self.xaxis))
-    w_yaxis = _api.deprecated("3.1", alternative="yaxis", pending=True)(
+    w_yaxis = _api.deprecated("3.1", alternative="yaxis", removal="3.8")(
         property(lambda self: self.yaxis))
-    w_zaxis = _api.deprecated("3.1", alternative="zaxis", pending=True)(
+    w_zaxis = _api.deprecated("3.1", alternative="zaxis", removal="3.8")(
         property(lambda self: self.zaxis))
 
     def unit_cube(self, vals=None):
@@ -273,27 +272,22 @@ class Axes3D(Axes):
         """
         Set the aspect ratios.
 
-        Axes 3D does not current support any aspect but 'auto' which fills
-        the Axes with the data limits.
-
-        To simulate having equal aspect in data space, set the ratio
-        of your data limits to match the value of `.get_box_aspect`.
-        To control box aspect ratios use `~.Axes3D.set_box_aspect`.
-
         Parameters
         ----------
-        aspect : {'auto'}
+        aspect : {'auto', 'equal', 'equalxy', 'equalxz', 'equalyz'}
             Possible values:
 
             =========   ==================================================
             value       description
             =========   ==================================================
             'auto'      automatic; fill the position rectangle with data.
+            'equal'     adapt all the axes to have equal aspect ratios.
+            'equalxy'   adapt the x and y axes to have equal aspect ratios.
+            'equalxz'   adapt the x and z axes to have equal aspect ratios.
+            'equalyz'   adapt the y and z axes to have equal aspect ratios.
             =========   ==================================================
 
-        adjustable : None
-            Currently ignored by Axes3D
-
+        adjustable : None or {'box', 'datalim'}, optional
             If not *None*, this defines which parameter will be adjusted to
             meet the required aspect. See `.set_adjustable` for further
             details.
@@ -322,13 +316,67 @@ class Axes3D(Axes):
         --------
         mpl_toolkits.mplot3d.axes3d.Axes3D.set_box_aspect
         """
-        if aspect != 'auto':
-            raise NotImplementedError(
-                "Axes3D currently only supports the aspect argument "
-                f"'auto'. You passed in {aspect!r}."
-            )
+        _api.check_in_list(('auto', 'equal', 'equalxy', 'equalyz', 'equalxz'),
+                           aspect=aspect)
+        if adjustable is None:
+            adjustable = self._adjustable
+        _api.check_in_list(('box', 'datalim'), adjustable=adjustable)
         super().set_aspect(
-            aspect, adjustable=adjustable, anchor=anchor, share=share)
+            aspect='auto', adjustable=adjustable, anchor=anchor, share=share)
+        self._aspect = aspect
+
+        if aspect in ('equal', 'equalxy', 'equalxz', 'equalyz'):
+            ax_idx = self._equal_aspect_axis_indices(aspect)
+
+            view_intervals = np.array([self.xaxis.get_view_interval(),
+                                       self.yaxis.get_view_interval(),
+                                       self.zaxis.get_view_interval()])
+            ptp = np.ptp(view_intervals, axis=1)
+            if adjustable == 'datalim':
+                mean = np.mean(view_intervals, axis=1)
+                delta = max(ptp[ax_idx])
+                scale = self._box_aspect[ptp == delta][0]
+                deltas = delta * self._box_aspect / scale
+
+                for i, set_lim in enumerate((self.set_xlim3d,
+                                             self.set_ylim3d,
+                                             self.set_zlim3d)):
+                    if i in ax_idx:
+                        set_lim(mean[i] - deltas[i]/2., mean[i] + deltas[i]/2.)
+            else:  # 'box'
+                # Change the box aspect such that the ratio of the length of
+                # the unmodified axis to the length of the diagonal
+                # perpendicular to it remains unchanged.
+                box_aspect = np.array(self._box_aspect)
+                box_aspect[ax_idx] = ptp[ax_idx]
+                remaining_ax_idx = {0, 1, 2}.difference(ax_idx)
+                if remaining_ax_idx:
+                    remaining = remaining_ax_idx.pop()
+                    old_diag = np.linalg.norm(self._box_aspect[ax_idx])
+                    new_diag = np.linalg.norm(box_aspect[ax_idx])
+                    box_aspect[remaining] *= new_diag / old_diag
+                self.set_box_aspect(box_aspect)
+
+    def _equal_aspect_axis_indices(self, aspect):
+        """
+        Get the indices for which of the x, y, z axes are constrained to have
+        equal aspect ratios.
+
+        Parameters
+        ----------
+        aspect : {'auto', 'equal', 'equalxy', 'equalxz', 'equalyz'}
+            See descriptions in docstring for `.set_aspect()`.
+        """
+        ax_indices = []  # aspect == 'auto'
+        if aspect == 'equal':
+            ax_indices = [0, 1, 2]
+        elif aspect == 'equalxy':
+            ax_indices = [0, 1]
+        elif aspect == 'equalxz':
+            ax_indices = [0, 2]
+        elif aspect == 'equalyz':
+            ax_indices = [1, 2]
+        return ax_indices
 
     def set_box_aspect(self, aspect, *, zoom=1):
         """
@@ -388,6 +436,8 @@ class Axes3D(Axes):
 
     @martist.allow_rasterization
     def draw(self, renderer):
+        if not self.get_visible():
+            return
         self._unstale_viewLim()
 
         # draw the background patch
@@ -400,11 +450,7 @@ class Axes3D(Axes):
         # it adjusts the view limits and the size of the bounding box
         # of the Axes
         locator = self.get_axes_locator()
-        if locator:
-            pos = locator(self, renderer)
-            self.apply_aspect(pos)
-        else:
-            self.apply_aspect()
+        self.apply_aspect(locator(self, renderer) if locator else None)
 
         # add the projection matrix to the renderer
         self.M = self.get_proj()
@@ -488,7 +534,7 @@ class Axes3D(Axes):
         applies to 3D Axes, it also takes a *z* argument, and returns
         ``(xmargin, ymargin, zmargin)``.
         """
-        if margins and x is not None and y is not None and z is not None:
+        if margins and (x is not None or y is not None or z is not None):
             raise TypeError('Cannot pass both positional and keyword '
                             'arguments for x, y, and/or z.')
         elif len(margins) == 1:
@@ -671,34 +717,12 @@ class Axes3D(Axes):
         """Get 3D z limits."""
         return tuple(self.zz_viewLim.intervalx)
 
-    def get_zscale(self):
-        """
-        Return the zaxis scale string %s
+    get_zscale = _axis_method_wrapper("zaxis", "get_scale")
 
-        """ % (", ".join(mscale.get_scale_names()))
-        return self.zaxis.get_scale()
-
-    # We need to slightly redefine these to pass scalez=False
-    # to their calls of autoscale_view.
-
-    def set_xscale(self, value, **kwargs):
-        self.xaxis._set_scale(value, **kwargs)
-        self.autoscale_view(scaley=False, scalez=False)
-        self._update_transScale()
-        self.stale = True
-
-    def set_yscale(self, value, **kwargs):
-        self.yaxis._set_scale(value, **kwargs)
-        self.autoscale_view(scalex=False, scalez=False)
-        self._update_transScale()
-        self.stale = True
-
-    def set_zscale(self, value, **kwargs):
-        self.zaxis._set_scale(value, **kwargs)
-        self.autoscale_view(scalex=False, scaley=False)
-        self._update_transScale()
-        self.stale = True
-
+    # Redefine all three methods to overwrite their docstrings.
+    set_xscale = _axis_method_wrapper("xaxis", "_set_axes_scale")
+    set_yscale = _axis_method_wrapper("yaxis", "_set_axes_scale")
+    set_zscale = _axis_method_wrapper("zaxis", "_set_axes_scale")
     set_xscale.__doc__, set_yscale.__doc__, set_zscale.__doc__ = map(
         """
         Set the {}-axis scale.
@@ -743,6 +767,21 @@ class Axes3D(Axes):
         Set the elevation and azimuth of the axes in degrees (not radians).
 
         This can be used to rotate the axes programmatically.
+
+        To look normal to the primary planes, the following elevation and
+        azimuth angles can be used. A roll angle of 0, 90, 180, or 270 deg
+        will rotate these views while keeping the axes at right angles.
+
+        ==========   ====  ====
+        view plane   elev  azim
+        ==========   ====  ====
+        XY           90    -90
+        XZ           0     -90
+        YZ           0     0
+        -XY          -90   90
+        -XZ          0     90
+        -YZ          0     180
+        ==========   ====  ====
 
         Parameters
         ----------
@@ -815,7 +854,7 @@ class Axes3D(Axes):
                 raise ValueError(f"focal_length = {focal_length} must be "
                                  "greater than 0")
             self._focal_length = focal_length
-        elif proj_type == 'ortho':
+        else:  # 'ortho':
             if focal_length not in (None, np.inf):
                 raise ValueError(f"focal_length = {focal_length} must be "
                                  f"None for proj_type = {proj_type}")
@@ -932,31 +971,33 @@ class Axes3D(Axes):
         """
         return False
 
+    def sharez(self, other):
+        """
+        Share the z-axis with *other*.
+
+        This is equivalent to passing ``sharex=other`` when constructing the
+        Axes, and cannot be used if the z-axis is already being shared with
+        another Axes.
+        """
+        _api.check_isinstance(maxes._base._AxesBase, other=other)
+        if self._sharez is not None and other is not self._sharez:
+            raise ValueError("z-axis is already shared")
+        self._shared_axes["z"].join(self, other)
+        self._sharez = other
+        self.zaxis.major = other.zaxis.major  # Ticker instances holding
+        self.zaxis.minor = other.zaxis.minor  # locator and formatter.
+        z0, z1 = other.get_zlim()
+        self.set_zlim(z0, z1, emit=False, auto=other.get_autoscalez_on())
+        self.zaxis._scale = other.zaxis._scale
+
     def clear(self):
         # docstring inherited.
         super().clear()
-        self.zaxis.clear()
-
-        if self._sharez is not None:
-            self.zaxis.major = self._sharez.zaxis.major
-            self.zaxis.minor = self._sharez.zaxis.minor
-            z0, z1 = self._sharez.get_zlim()
-            self.set_zlim(z0, z1, emit=False, auto=None)
-            self.zaxis._set_scale(self._sharez.zaxis.get_scale())
-        else:
-            self.zaxis._set_scale('linear')
-            try:
-                self.set_zlim(0, 1)
-            except TypeError:
-                pass
-
-        self.set_autoscalez_on(True)
         if self._focal_length == np.inf:
-            self._zmargin = rcParams['axes.zmargin']
+            self._zmargin = mpl.rcParams['axes.zmargin']
         else:
             self._zmargin = 0.
-
-        self.grid(rcParams['axes3d.grid'])
+        self.grid(mpl.rcParams['axes3d.grid'])
 
     def _button_press(self, event):
         if event.inaxes == self:
@@ -1383,7 +1424,7 @@ class Axes3D(Axes):
         rcount = kwargs.pop('rcount', 50)
         ccount = kwargs.pop('ccount', 50)
 
-        if rcParams['_internal.classic_mode']:
+        if mpl.rcParams['_internal.classic_mode']:
             # Strides have priority over counts in classic mode.
             # So, only compute strides from counts
             # if counts were explicitly given
@@ -1629,7 +1670,7 @@ class Axes3D(Axes):
         rcount = kwargs.pop('rcount', 50)
         ccount = kwargs.pop('ccount', 50)
 
-        if rcParams['_internal.classic_mode']:
+        if mpl.rcParams['_internal.classic_mode']:
             # Strides have priority over counts in classic mode.
             # So, only compute strides from counts
             # if counts were explicitly given
@@ -2899,33 +2940,7 @@ pivot='tail', normalize=False, **kwargs)
         if not len(x) == len(y) == len(z):
             raise ValueError("'x', 'y', and 'z' must have the same size")
 
-        if isinstance(errorevery, Integral):
-            errorevery = (0, errorevery)
-        if isinstance(errorevery, tuple):
-            if (len(errorevery) == 2 and
-                    isinstance(errorevery[0], Integral) and
-                    isinstance(errorevery[1], Integral)):
-                errorevery = slice(errorevery[0], None, errorevery[1])
-            else:
-                raise ValueError(
-                    f'errorevery={errorevery!r} is a not a tuple of two '
-                    f'integers')
-
-        elif isinstance(errorevery, slice):
-            pass
-
-        elif not isinstance(errorevery, str) and np.iterable(errorevery):
-            # fancy indexing
-            try:
-                x[errorevery]
-            except (ValueError, IndexError) as err:
-                raise ValueError(
-                    f"errorevery={errorevery!r} is iterable but not a valid "
-                    f"NumPy fancy index to match "
-                    f"'xerr'/'yerr'/'zerr'") from err
-        else:
-            raise ValueError(
-                f"errorevery={errorevery!r} is not a recognized value")
+        everymask = self._errorevery_to_mask(x, errorevery)
 
         label = kwargs.pop("label", None)
         kwargs['label'] = '_nolegend_'
@@ -2980,15 +2995,12 @@ pivot='tail', normalize=False, **kwargs)
         # Make the style dict for caps (the "hats").
         eb_cap_style = {**base_style, 'linestyle': 'None'}
         if capsize is None:
-            capsize = rcParams["errorbar.capsize"]
+            capsize = mpl.rcParams["errorbar.capsize"]
         if capsize > 0:
             eb_cap_style['markersize'] = 2. * capsize
         if capthick is not None:
             eb_cap_style['markeredgewidth'] = capthick
         eb_cap_style['color'] = ecolor
-
-        everymask = np.zeros(len(x), bool)
-        everymask[errorevery] = True
 
         def _apply_mask(arrays, mask):
             # Return, for each array in *arrays*, the elements for which *mask*
@@ -3024,7 +3036,7 @@ pivot='tail', normalize=False, **kwargs)
         # scene is rotated, they are given a standard size based on viewing
         # them directly in planar form.
         quiversize = eb_cap_style.get('markersize',
-                                      rcParams['lines.markersize']) ** 2
+                                      mpl.rcParams['lines.markersize']) ** 2
         quiversize *= self.figure.dpi / 72
         quiversize = self.transAxes.inverted().transform([
             (0, 0), (quiversize, quiversize)])
@@ -3126,7 +3138,7 @@ pivot='tail', normalize=False, **kwargs)
 
         return errlines, caplines, limmarks
 
-    def get_tightbbox(self, renderer, call_axes_locator=True,
+    def get_tightbbox(self, renderer=None, call_axes_locator=True,
                       bbox_extra_artists=None, *, for_layout_only=False):
         ret = super().get_tightbbox(renderer,
                                     call_axes_locator=call_axes_locator,
@@ -3239,7 +3251,7 @@ pivot='tail', normalize=False, **kwargs)
         # Determine style for stem lines.
         linestyle, linemarker, linecolor = _process_plot_format(linefmt)
         if linestyle is None:
-            linestyle = rcParams['lines.linestyle']
+            linestyle = mpl.rcParams['lines.linestyle']
 
         # Plot everything in required order.
         baseline, = self.plot(basex, basey, basefmt, zs=bottom,

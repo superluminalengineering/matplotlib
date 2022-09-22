@@ -39,7 +39,7 @@ def test_rcparams(tmpdir):
     linewidth = mpl.rcParams['lines.linewidth']
 
     rcpath = Path(tmpdir) / 'test_rcparams.rc'
-    rcpath.write_text('lines.linewidth: 33')
+    rcpath.write_text('lines.linewidth: 33', encoding='utf-8')
 
     # test context given dictionary
     with mpl.rc_context(rc={'text.usetex': not usetex}):
@@ -191,7 +191,7 @@ def test_axes_titlecolor_rcparams():
 
 def test_Issue_1713(tmpdir):
     rcpath = Path(tmpdir) / 'test_rcparams.rc'
-    rcpath.write_text('timezone: UTC', encoding='UTF-32-BE')
+    rcpath.write_text('timezone: UTC', encoding='utf-8')
     with mock.patch('locale.getpreferredencoding', return_value='UTF-32-BE'):
         rc = mpl.rc_params_from_file(rcpath, True, False)
     assert rc.get('timezone') == 'UTC'
@@ -494,6 +494,13 @@ def test_keymaps():
     key_list = [k for k in mpl.rcParams if 'keymap' in k]
     for k in key_list:
         assert isinstance(mpl.rcParams[k], list)
+
+
+def test_no_backend_reset_rccontext():
+    assert mpl.rcParams['backend'] != 'module://aardvark'
+    with mpl.rc_context():
+        mpl.rcParams['backend'] = 'module://aardvark'
+    assert mpl.rcParams['backend'] == 'module://aardvark'
 
 
 def test_rcparams_reset_after_fail():

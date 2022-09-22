@@ -960,6 +960,7 @@ _validators = {
     "contour.negative_linestyle": _validate_linestyle,
     "contour.corner_mask":        validate_bool,
     "contour.linewidth":          validate_float_or_None,
+    "contour.algorithm":          ["mpl2005", "mpl2014", "serial", "threaded"],
 
     # errorbar props
     "errorbar.capsize": validate_float,
@@ -1130,6 +1131,10 @@ _validators = {
     # figure title
     "figure.titlesize":   validate_fontsize,
     "figure.titleweight": validate_fontweight,
+
+    # figure labels
+    "figure.labelsize":   validate_fontsize,
+    "figure.labelweight": validate_fontweight,
 
     # figure size in inches: width by height
     "figure.figsize":          _listify_validator(validate_float, n=2),

@@ -44,13 +44,9 @@ from matplotlib import _api, cbook
 _log = logging.getLogger(__name__)
 
 # Process creation flag for subprocess to prevent it raising a terminal
-# window. See for example:
-# https://stackoverflow.com/q/24130623/
-if sys.platform == 'win32':
-    subprocess_creation_flags = CREATE_NO_WINDOW = 0x08000000
-else:
-    # Apparently None won't work here
-    subprocess_creation_flags = 0
+# window. See for example https://stackoverflow.com/q/24130623/
+subprocess_creation_flags = (
+    subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
 
 # Other potential writing methods:
 # * http://pymedia.org/
@@ -740,7 +736,7 @@ class HTMLWriter(FileMovieWriter):
 
         super().__init__(fps, codec, bitrate, extra_args, metadata)
 
-    def setup(self, fig, outfile, dpi, frame_dir=None):
+    def setup(self, fig, outfile, dpi=None, frame_dir=None):
         outfile = Path(outfile)
         _api.check_in_list(['.html', '.htm'], outfile_extension=outfile.suffix)
 

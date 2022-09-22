@@ -1,4 +1,6 @@
 import difflib
+import re
+
 import numpy as np
 import subprocess
 import sys
@@ -234,37 +236,13 @@ def test_subplot_kwarg_collision():
     assert ax1 not in plt.gcf().axes
 
 
-def test_gca_kwargs():
+def test_gca():
     # plt.gca() returns an existing axes, unless there were no axes.
     plt.figure()
     ax = plt.gca()
     ax1 = plt.gca()
     assert ax is not None
     assert ax1 is ax
-    plt.close()
-
-    # plt.gca() raises a DeprecationWarning if called with kwargs.
-    plt.figure()
-    with pytest.warns(
-            MatplotlibDeprecationWarning,
-            match=r'Calling gca\(\) with keyword arguments was deprecated'):
-        ax = plt.gca(projection='polar')
-    ax1 = plt.gca()
-    assert ax is not None
-    assert ax1 is ax
-    assert ax1.name == 'polar'
-    plt.close()
-
-    # plt.gca() ignores keyword arguments if an Axes already exists.
-    plt.figure()
-    ax = plt.gca()
-    with pytest.warns(
-            MatplotlibDeprecationWarning,
-            match=r'Calling gca\(\) with keyword arguments was deprecated'):
-        ax1 = plt.gca(projection='polar')
-    assert ax is not None
-    assert ax1 is ax
-    assert ax1.name == 'rectilinear'
     plt.close()
 
 
@@ -343,3 +321,80 @@ def test_fallback_position():
     axtest = plt.axes([0.2, 0.2, 0.5, 0.5], position=[0.1, 0.1, 0.8, 0.8])
     np.testing.assert_allclose(axtest.bbox.get_points(),
                                axref.bbox.get_points())
+
+
+def test_set_current_figure_via_subfigure():
+    fig1 = plt.figure()
+    subfigs = fig1.subfigures(2)
+
+    plt.figure()
+    assert plt.gcf() != fig1
+
+    current = plt.figure(subfigs[1])
+    assert plt.gcf() == fig1
+    assert current == fig1
+
+
+def test_set_current_axes_on_subfigure():
+    fig = plt.figure()
+    subfigs = fig.subfigures(2)
+
+    ax = subfigs[0].subplots(1, squeeze=True)
+    subfigs[1].subplots(1, squeeze=True)
+
+    assert plt.gca() != ax
+    plt.sca(ax)
+    assert plt.gca() == ax
+
+
+def test_pylab_integration():
+    IPython = pytest.importorskip("IPython")
+    mpl.testing.subprocess_run_helper(
+        IPython.start_ipython,
+        "--pylab",
+        "-c",
+        ";".join((
+            "import matplotlib.pyplot as plt",
+            "assert plt._REPL_DISPLAYHOOK == plt._ReplDisplayHook.IPYTHON",
+        )),
+        timeout=60,
+    )
+
+
+def test_doc_pyplot_summary():
+    """Test that pyplot_summary lists all the plot functions."""
+    pyplot_docs = Path(__file__).parent / '../../../doc/api/pyplot_summary.rst'
+    if not pyplot_docs.exists():
+        pytest.skip("Documentation sources not available")
+
+    lines = pyplot_docs.read_text()
+    m = re.search(r':nosignatures:\n\n(.*?)\n\n', lines, re.DOTALL)
+    doc_functions = set(line.strip() for line in m.group(1).split('\n'))
+    plot_commands = set(plt.get_plot_commands())
+    missing = plot_commands.difference(doc_functions)
+    if missing:
+        raise AssertionError(
+            f"The following pyplot functions are not listed in the "
+            f"documentation. Please add them to doc/api/pyplot_summary.rst: "
+            f"{missing!r}")
+    extra = doc_functions.difference(plot_commands)
+    if extra:
+        raise AssertionError(
+            f"The following functions are listed in the pyplot documentation, "
+            f"but they do not exist in pyplot. "
+            f"Please remove them from doc/api/pyplot_summary.rst: {extra!r}")
+
+
+def test_minor_ticks():
+    plt.figure()
+    plt.plot(np.arange(1, 10))
+    tick_pos, tick_labels = plt.xticks(minor=True)
+    assert np.all(tick_labels == np.array([], dtype=np.float64))
+    assert tick_labels == []
+
+    plt.yticks(ticks=[3.5, 6.5], labels=["a", "b"], minor=True)
+    ax = plt.gca()
+    tick_pos = ax.get_yticks(minor=True)
+    tick_labels = ax.get_yticklabels(minor=True)
+    assert np.all(tick_pos == np.array([3.5, 6.5]))
+    assert [l.get_text() for l in tick_labels] == ['a', 'b']

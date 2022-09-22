@@ -81,7 +81,7 @@ Matplotlib was initially written by John D. Hunter (1968-2012) and is now
 developed and maintained by a host of others.
 
 Occasionally the internal documentation (python docstrings) will refer
-to MATLAB&reg;, a registered trademark of The MathWorks, Inc.
+to MATLAB®, a registered trademark of The MathWorks, Inc.
 
 """
 
@@ -164,11 +164,13 @@ def _parse_to_version_info(version_str):
 
 def _get_version():
     """Return the version string used for __version__."""
-    # Only shell out to a git subprocess if really needed, and not on a
-    # shallow clone, such as those used by CI, as the latter would trigger
-    # a warning from setuptools_scm.
+    # Only shell out to a git subprocess if really needed, i.e. when we are in
+    # a matplotlib git repo but not in a shallow clone, such as those used by
+    # CI, as the latter would trigger a warning from setuptools_scm.
     root = Path(__file__).resolve().parents[2]
-    if (root / ".git").exists() and not (root / ".git/shallow").exists():
+    if ((root / ".matplotlib-repo").exists()
+            and (root / ".git").exists()
+            and not (root / ".git/shallow").exists()):
         import setuptools_scm
         return setuptools_scm.get_version(
             root=root,
@@ -434,6 +436,7 @@ def _get_executable_info(name):
         raise ValueError("Unknown executable: {!r}".format(name))
 
 
+@_api.deprecated("3.6", alternative="a vendored copy of this function")
 def checkdep_usetex(s):
     if not s:
         return False
@@ -675,6 +678,11 @@ class RcParams(MutableMapping, dict):
 
         return dict.__getitem__(self, key)
 
+    def _get_backend_or_none(self):
+        """Get the requested backend, if any, without triggering resolution."""
+        backend = dict.__getitem__(self, "backend")
+        return None if backend is rcsetup._auto_backend_sentinel else backend
+
     def __repr__(self):
         class_name = self.__class__.__name__
         indent = len(class_name) + 1
@@ -754,10 +762,7 @@ def _open_file_or_url(fname):
             yield (line.decode('utf-8') for line in f)
     else:
         fname = os.path.expanduser(fname)
-        encoding = locale.getpreferredencoding(do_setlocale=False)
-        if encoding is None:
-            encoding = "utf-8"
-        with open(fname, encoding=encoding) as f:
+        with open(fname, encoding='utf-8') as f:
             yield f
 
 
@@ -802,11 +807,8 @@ def _rc_params_in_file(fname, transform=lambda x: x, fail_on_error=False):
                                  fname, line_no, line.rstrip('\n'))
                 rc_temp[key] = (val, line, line_no)
         except UnicodeDecodeError:
-            _log.warning('Cannot decode configuration file %s with encoding '
-                         '%s, check LANG and LC_* variables.',
-                         fname,
-                         locale.getpreferredencoding(do_setlocale=False)
-                         or 'utf-8 (default)')
+            _log.warning('Cannot decode configuration file %r as utf-8.',
+                         fname)
             raise
 
     config = RcParams()
@@ -1057,6 +1059,8 @@ def rc_context(rc=None, fname=None):
     """
     Return a context manager for temporarily changing rcParams.
 
+    The :rc:`backend` will not be reset by the context manager.
+
     Parameters
     ----------
     rc : dict
@@ -1085,7 +1089,8 @@ def rc_context(rc=None, fname=None):
              plt.plot(x, y)  # uses 'print.rc'
 
     """
-    orig = rcParams.copy()
+    orig = dict(rcParams.copy())
+    del orig['backend']
     try:
         if fname:
             rc_file(fname)
@@ -1132,9 +1137,8 @@ def use(backend, *, force=True):
     matplotlib.get_backend
     """
     name = validate_backend(backend)
-    # we need to use the base-class method here to avoid (prematurely)
-    # resolving the "auto" backend setting
-    if dict.__getitem__(rcParams, 'backend') == name:
+    # don't (prematurely) resolve the "auto" backend setting
+    if rcParams._get_backend_or_none() == name:
         # Nothing to do if the requested backend is already set
         pass
     else:
@@ -1455,3 +1459,4 @@ _log.debug('platform is %s', sys.platform)
 # workaround: we must defer colormaps import to after loading rcParams, because
 # colormap creation depends on rcParams
 from matplotlib.cm import _colormaps as colormaps
+from matplotlib.colors import _color_sequences as color_sequences

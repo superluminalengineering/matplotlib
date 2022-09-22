@@ -133,7 +133,7 @@ class BuildExtraLibraries(setuptools.command.build_ext.build_ext):
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT,
                                         universal_newlines=True)
-            except Exception as e:
+            except Exception:
                 pass
             else:
                 version = result.stdout.lower()
@@ -194,7 +194,7 @@ def update_matplotlibrc(path):
     # line.  Otherwise, use the default `##backend: Agg` which has no effect
     # even after decommenting, which allows _auto_backend_sentinel to be filled
     # in at import time.
-    template_lines = path.read_text().splitlines(True)
+    template_lines = path.read_text(encoding="utf-8").splitlines(True)
     backend_line_idx, = [  # Also asserts that there is a single such line.
         idx for idx, line in enumerate(template_lines)
         if "#backend:" in line]
@@ -202,7 +202,7 @@ def update_matplotlibrc(path):
         "#backend: {}\n".format(setupext.options["backend"])
         if setupext.options["backend"]
         else "##backend: Agg\n")
-    path.write_text("".join(template_lines))
+    path.write_text("".join(template_lines), encoding="utf-8")
 
 
 class BuildPy(setuptools.command.build_py.build_py):
@@ -263,7 +263,7 @@ setup(  # Finally, pass this all along to setuptools to do the heavy lifting.
     author="John D. Hunter, Michael Droettboom",
     author_email="matplotlib-users@python.org",
     url="https://matplotlib.org",
-    download_url="https://matplotlib.org/users/installing.html",
+    download_url="https://matplotlib.org/stable/users/installing/index.html",
     project_urls={
         'Documentation': 'https://matplotlib.org',
         'Source Code': 'https://github.com/matplotlib/matplotlib',
@@ -302,10 +302,10 @@ setup(  # Finally, pass this all along to setuptools to do the heavy lifting.
     setup_requires=[
         "certifi>=2020.06.20",
         "numpy>=1.19",
-        "setuptools_scm>=4",
-        "setuptools_scm_git_archive",
+        "setuptools_scm>=7",
     ],
     install_requires=[
+        "contourpy>=1.0.1",
         "cycler>=0.10",
         "fonttools>=4.22.0",
         "kiwisolver>=1.0.1",
@@ -316,7 +316,7 @@ setup(  # Finally, pass this all along to setuptools to do the heavy lifting.
         "python-dateutil>=2.7",
     ] + (
         # Installing from a git checkout that is not producing a wheel.
-        ["setuptools_scm>=4"] if (
+        ["setuptools_scm>=7"] if (
             Path(__file__).with_name(".git").exists() and
             os.environ.get("CIBUILDWHEEL", "0") != "1"
         ) else []

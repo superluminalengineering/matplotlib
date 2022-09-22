@@ -13,12 +13,8 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 from matplotlib.testing.decorators import check_figures_equal, image_comparison
+from matplotlib.testing._markers import needs_usetex
 from matplotlib.text import Text
-
-
-needs_usetex = pytest.mark.skipif(
-    not mpl.checkdep_usetex(True),
-    reason="This test needs a TeX installation")
 
 
 @image_comparison(['font_styles'])
@@ -523,8 +519,8 @@ def test_two_2line_texts(spacing1, spacing2):
     fig = plt.figure()
     renderer = fig.canvas.get_renderer()
 
-    text1 = plt.text(0.25, 0.5, text_string, linespacing=spacing1)
-    text2 = plt.text(0.25, 0.5, text_string, linespacing=spacing2)
+    text1 = fig.text(0.25, 0.5, text_string, linespacing=spacing1)
+    text2 = fig.text(0.25, 0.5, text_string, linespacing=spacing2)
     fig.canvas.draw()
 
     box1 = text1.get_window_extent(renderer=renderer)
@@ -536,6 +532,11 @@ def test_two_2line_texts(spacing1, spacing2):
         assert box1.height == box2.height
     else:
         assert box1.height != box2.height
+
+
+def test_validate_linespacing():
+    with pytest.raises(TypeError):
+        plt.text(.25, .5, "foo", linespacing="abc")
 
 
 def test_nonfinite_pos():
