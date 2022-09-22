@@ -3,6 +3,8 @@ import builtins
 from datetime import datetime
 from plotly import tools
 
+__cell_id__ = 0
+
 class Plotly:
 
     @classmethod
@@ -10,7 +12,7 @@ class Plotly:
         try:
             plot = tools.mpl_to_plotly(fig)
             json = plot.to_json()
-            cell_id = builtins.__cell_id__
+            cell_id = __cell_id__
             timestamp = datetime.utcnow().timestamp()
             file = open("plots/{}-{}.json".format(cell_id, timestamp), "w")
             file.write(json)
